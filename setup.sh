@@ -26,7 +26,6 @@ function install_agent {
 }
 
 function make_intake_file {
-	mkdir -p sekoiaio-concentrator && cd sekoiaio-concentrator
 	echo -e "---\nintakes:" > "$INTAKES"
 	for i in {0..10000}; do
 		echo '---->>> Adding new intake'
@@ -54,7 +53,6 @@ function make_intake_file {
 }
 
 function make_docker_compose_file {
-	mkdir -p sekoiaio-concentrator && cd sekoiaio-concentrator
 	echo '---->>> Downloading docker-compose template...'
 	wget "$DOCKER_COMPOSE_TEMPLATE_URL"
 	grep -q '20516-20566:20516-20566' "$DOCKER_COMPOSE"
@@ -70,9 +68,9 @@ function make_docker_compose_file {
 }
 
 function start_docker {
+	echo '---->>> Starting the forwarder'
 	sudo docker compose up -d
 }
-
 
 # don't touch configuration if it already exists
 warn_file_exists() {
@@ -80,16 +78,44 @@ warn_file_exists() {
 	echo "---->>> $file is already configured."
 	echo "  Edit \`$file\` to change configuration."
 	echo "  Or delete/move \`$file\` and re-run to continue."
-	echo "
+	echo
 	exit 1
 }
 
-for f in "$INTAKES" "$DOCKER_COMPOSE"; do
-	[ -f "$f" ] && warn_file_exists "$f"
-done
+if [ "$1" = "install" ]; then
+	install_agent
 
-install_agent
-make_intake_file
-make_docker_compose_file
-start_docker
+	mkdir -p sekoiaio-concentrator && cd sekoiaio-concentrator
+
+	for f in "$INTAKES" "$DOCKER_COMPOSE"; do
+		[ -f "$f" ] && warn_file_exists "$f"
+	done
+
+	make_intake_file
+	make_docker_compose_file
+	start_docker
+else
+	echo
+	echo '========================================'
+	echo 'Sekoia Forwarder Setup'
+	echo '========================================'
+	echo
+	echo 'Step 1. Change password'
+	echo '------------------------------'
+	echo 'Command: passwd'
+	echo
+	echo 'Step 2. Configure networking'
+	echo '------------------------------'
+	echo 'Edit IP, gateway and DNS of the existing interface.'
+	echo 'Command: sudo nano /etc/network/interfaces'
+	echo
+	echo 'Step 3. Update the system'
+	echo '------------------------------'
+	echo 'Command: sudo apt-get update -y && sudo apt-get upgrade -y'
+	echo
+	echo 'Step 4. Launch setup'
+	echo '------------------------------'
+	echo 'Command: ./setup.sh install'
+	echo
+fi
 
