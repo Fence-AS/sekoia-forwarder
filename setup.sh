@@ -73,7 +73,7 @@ function start_docker {
 }
 
 # don't touch configuration if it already exists
-warn_file_exists() {
+warn_file_exists {
 	local file="$1"
 	echo "---->>> $file is already configured."
 	echo "  Edit \`$file\` to change configuration."
