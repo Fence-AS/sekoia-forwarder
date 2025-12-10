@@ -23,12 +23,14 @@ function install_agent {
 	chmod +x ./"$SEKOIA_AGENT"
 	sudo ./"$SEKOIA_AGENT" install --intake-key "$agent_key"
 	sudo systemctl status SEKOIAEndpointAgent.service
+	rm "$SEKOIA_AGENT"
 }
 
 function make_intake_file {
+	echo '---->>> Configuring intakes'
 	echo -e "---\nintakes:" > "$INTAKES"
 	for i in {0..10000}; do
-		echo '---->>> Adding new intake'
+		echo '---->>> Add new intake'
 		read -p '  A descriptive name: ' intake_name
 		read -p '  Sekoia intake key: ' intake_key
 		cat <<-EOF >> "$INTAKES"
@@ -68,12 +70,12 @@ function make_docker_compose_file {
 }
 
 function start_docker {
-	echo '---->>> Starting the forwarder'
+	echo '---->>> Starting the forwarder...'
 	sudo docker compose up -d
 }
 
 # don't touch configuration if it already exists
-warn_file_exists {
+function warn_file_exists {
 	local file="$1"
 	echo "---->>> $file is already configured."
 	echo "  Edit \`$file\` to change configuration."
