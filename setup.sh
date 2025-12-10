@@ -96,6 +96,7 @@ if [ "$1" = "install" ]; then
 	make_intake_file
 	make_docker_compose_file
 	start_docker
+	echo "Finished!"
 else
 	echo
 	echo '========================================'
