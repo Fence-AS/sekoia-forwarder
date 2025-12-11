@@ -14,9 +14,9 @@ SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
 EXTRA_PORTS=0 # updated by script
 
 function install_agent {
-	echo "---->>> Downloading Sekoia Endpoint Agent..."
+	echo '---->>> Downloading Sekoia Endpoint Agent...'
 	wget "$SEKOIA_AGENT_URL"
-	echo "---->>> Installing Sekoia Endpoint Agent..."
+	echo '---->>> Installing Sekoia Endpoint Agent...'
 	sudo systemctl stop auditd
 	sudo systemctl disable auditd
 	read -p 'Sekoia endpoint agent intake key: ' agent_key
@@ -96,7 +96,7 @@ if [ "$1" = "install" ]; then
 	make_intake_file
 	make_docker_compose_file
 	start_docker
-	echo "Finished!"
+	echo 'Finished!'
 else
 	echo
 	echo '========================================'
