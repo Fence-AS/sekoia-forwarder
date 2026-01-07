@@ -3,7 +3,7 @@
 # this file uses tabs
 # do not substitute tabs for spaces
 
-START_PORT=21111
+START_PORT=22001
 DEFAULT_PROTOCOL=tcp
 INTAKES=intakes.yaml
 DOCKER_COMPOSE=docker-compose.yml
