@@ -5,6 +5,7 @@
 
 START_PORT=22001
 DEFAULT_PROTOCOL=tcp
+INSTALL_DEST=sekoiaio-concentrator
 INTAKES=intakes.yaml
 DOCKER_COMPOSE=docker-compose.yml
 DOCKER_COMPOSE_TEMPLATE_URL='https://raw.githubusercontent.com/SEKOIA-IO/sekoiaio-docker-concentrator/main/docker-compose/docker-compose.yml'
@@ -13,7 +14,45 @@ SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
 
 EXTRA_PORTS=0 # updated by script
 
-function install_agent {
+function initial_os_setup {
+	echo '---->>> Installing sudo...'
+	sudo apt-get install -y sudo
+	echo "---->>> Change password of user $(whoami)"
+	passwd
+	echo "---->>> Adding $(whoami) as sudoer"
+	usermod -aG sudo $(whoami)
+	echo "---->>> Change password of user root (first enter sudo password of $(whoami))"
+	sudo passwd root
+	sudo apt-get install -y unattended-upgrades
+	echo '---->>> Installing auditd...'
+	sudo apt-get install -y auditd
+}
+
+function docker_install {
+	sudo apt-get remove docker docker-engine docker.io containerd runc > /dev/null
+	echo '---->>> Old docker version deleted'
+
+	sudo apt-get update > /dev/null
+	sudo apt-get install -y ca-certificates curl gnupg lsb-release > /dev/null
+	echo '---->>> System updated and prerequisite packages intalled'
+
+	sudo mkdir -m 0755 -p /etc/apt/keyrings
+	curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+	echo '---->>> Docker GPG key collected'
+
+	echo \
+	  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+	  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+	echo "---->>> Repository updated, ready to start docker installation"
+
+	sudo apt-get update > /dev/null
+	sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin > /dev/null
+	echo '---->>> Docker packages intalled'
+
+	sudo docker run hello-world
+}
+
+function install_sekoia_agent {
 	echo '---->>> Downloading Sekoia Endpoint Agent...'
 	wget "$SEKOIA_AGENT_URL"
 	echo '---->>> Installing Sekoia Endpoint Agent...'
@@ -27,6 +66,9 @@ function install_agent {
 }
 
 function make_intake_file {
+	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
+	mv  "$INTAKES" "$INTAKES".bck 2>/dev/null
+
 	echo '---->>> Configuring intakes'
 	echo -e "---\nintakes:" > "$INTAKES"
 	for i in {0..10000}; do
@@ -46,15 +88,23 @@ function make_intake_file {
 			* ) break ;;
 		esac
 	done
-	EXTRA_PORTS=$i	
+	EXTRA_PORTS=$i
+
+	echo '---->>> Activating  monitoring of forwarder logs'
+	read -p '  Sekoia.io forwarder logs intake key : ' intake_key
+	cat <<-EOF >> "$INTAKES"
+	- name: Monitoring
+	   stats: True
+	   intake_key: $intake_key
+	EOF
 	echo -e "\n"
-	echo "---->>> Wrote \`"$INTAKES"\`:"
-	cat "$INTAKES"
-	echo 
-	echo "---->>> NOTE: Edit \`"$INTAKES"\` to change protocols or ports if required"
+	echo "---->>> Wrote \`"$INTAKES"\`"
 }
 
 function make_docker_compose_file {
+	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
+	mv  "$DOCKER_COMPOSE" "$DOCKER_COMPOSE".bck 2>/dev/null
+
 	echo '---->>> Downloading docker-compose template...'
 	wget "$DOCKER_COMPOSE_TEMPLATE_URL"
 	grep -q '20516-20566:20516-20566' "$DOCKER_COMPOSE"
@@ -69,34 +119,45 @@ function make_docker_compose_file {
 	fi
 }
 
-function start_docker {
+function start_forwarder{
+	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
 	echo '---->>> Starting the forwarder...'
 	sudo docker compose up -d
 }
 
-# don't touch configuration if it already exists
-function warn_file_exists {
-	local file="$1"
-	echo "---->>> $file is already configured."
-	echo "  Edit \`$file\` to change configuration."
-	echo "  Or delete/move \`$file\` and re-run to continue."
+function final_info {
+	echo "---->>> Intake file in use:"
+	cat "$INTAKES"
 	echo
-	exit 1
+	echo "---->>> NOTE: Edit \`"$INTAKES"\` to change protocols or ports if required"
+}
+
+function run_engine {
+	declare -A steps=(
+		[initial_os_setup]="Initial setup of  sudo etc."
+		[docker_install]="Install Docker"
+		[install_sekoia_agent]="Install Sekoia agent"
+		[make_intake_file]="Configure ports and intake keys"
+		[make_docker_compose_file]="Prepare docker-compose file"
+		[start_fowarder]="Start fowarder"
+	)
+
+	for fun in "${!steps[@]}"; do
+		echo "${steps[$fun]}"
+		read -rp "Run $fun? [y/N] " answer
+		[[ "$answer" =~ ^[Yy] ]] && "$fun"
+	done
 }
 
 if [ "$1" = "install" ]; then
-	install_agent
 
-	mkdir -p sekoiaio-concentrator && cd sekoiaio-concentrator
+	if [[ "$EUID" -eq 0 ]]; then
+		echo "ERROR: Do not run this script as root or with sudo."
+		exit 1
+	fi
 
-	for f in "$INTAKES" "$DOCKER_COMPOSE"; do
-		[ -f "$f" ] && warn_file_exists "$f"
-	done
-
-	make_intake_file
-	make_docker_compose_file
-	start_docker
-	echo 'Finished!'
+	run_engine
+	final_info
 else
 	echo
 	echo '========================================'
