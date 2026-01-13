@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# this file uses tabs
-# do not substitute tabs for spaces
+# this file requires tabs for indentation
+# do not replace tabs with spaces
 
 START_PORT=22001
 DEFAULT_PROTOCOL=tcp
