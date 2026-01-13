@@ -14,6 +14,11 @@ SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
 
 EXTRA_PORTS=0 # updated by script
 
+function change_user_password {
+	echo "---->>> Change password of $(whoami)"
+	passwd 
+}
+
 function change_root_password {
 	echo "---->>> Change password of user root (first enter sudo password of $(whoami))"
 	sudo passwd root
@@ -133,6 +138,7 @@ function final_info {
 
 function runner {
 	ordered_steps=(
+		change_user_password
 		change_root_password
 		install_dependencies
 		docker_install

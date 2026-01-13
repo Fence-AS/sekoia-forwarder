@@ -19,6 +19,7 @@ bash setup.sh
 
 During execution, the script prompts for confirmation to run the following steps:
 
+- Change the user password
 - Change the root password
 - Install required dependencies
 - Install Docker
