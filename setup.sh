@@ -14,27 +14,26 @@ SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
 
 EXTRA_PORTS=0 # updated by script
 
-function initial_os_setup {
-	echo '---->>> Installing sudo...'
-	sudo apt-get install -y sudo
-	echo "---->>> Change password of user $(whoami)"
-	passwd
-	echo "---->>> Adding $(whoami) as sudoer"
-	usermod -aG sudo $(whoami)
+function change_root_password {
 	echo "---->>> Change password of user root (first enter sudo password of $(whoami))"
 	sudo passwd root
+}
+
+function install_dependencies {
+	sudo apt-get update > /dev/null
+	echo '---->>> Installing unattended upgrades...'
 	sudo apt-get install -y unattended-upgrades
+	echo '---->>> Installing prerequisite packages...'
+	sudo apt-get install -y ca-certificates curl gnupg lsb-release > /dev/null
 	echo '---->>> Installing auditd...'
 	sudo apt-get install -y auditd
 }
 
 function docker_install {
+	# from https://docs.sekoia.io/integration/ingestion_methods/sekoiaio_forwarder/#5-minutes-setup-on-debian
+	sudo apt-get update > /dev/null
 	sudo apt-get remove docker docker-engine docker.io containerd runc > /dev/null
 	echo '---->>> Old docker version deleted'
-
-	sudo apt-get update > /dev/null
-	sudo apt-get install -y ca-certificates curl gnupg lsb-release > /dev/null
-	echo '---->>> System updated and prerequisite packages intalled'
 
 	sudo mkdir -m 0755 -p /etc/apt/keyrings
 	curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -73,8 +72,8 @@ function make_intake_file {
 	echo -e "---\nintakes:" > "$INTAKES"
 	for i in {0..10000}; do
 		echo '---->>> Add new intake'
-		read -p '  A descriptive name: ' intake_name
-		read -p '  Sekoia intake key: ' intake_key
+		read -r -p '  A descriptive name: ' intake_name
+		read -r -p '  Sekoia intake key: ' intake_key
 		cat <<-EOF >> "$INTAKES"
 		- name: $(echo $intake_name | tr -s ' ' '-')
 		  protocol: $DEFAULT_PROTOCOL
@@ -82,22 +81,21 @@ function make_intake_file {
 		  intake_key: $intake_key
 		EOF
 		echo
-		read -n1 -p 'More intakes? (y/n): ' answer
+		read -r -n1 -p 'More intakes? (y/n): ' answer
 		case "$answer" in
-			[Yy]* ) echo; echo; continue ;;
-			* ) break ;;
+			[Yy] ) echo; echo; continue ;;
+			* ) echo; break ;;
 		esac
 	done
 	EXTRA_PORTS=$i
 
-	echo '---->>> Activating  monitoring of forwarder logs'
-	read -p '  Sekoia.io forwarder logs intake key : ' intake_key
+	echo '---->>> Activating monitoring of forwarder logs'
+	read -r -p '  Sekoia.io forwarder logs intake key: ' intake_key
 	cat <<-EOF >> "$INTAKES"
 	- name: Monitoring
-	   stats: True
-	   intake_key: $intake_key
+	  stats: True
+	  intake_key: $intake_key
 	EOF
-	echo -e "\n"
 	echo "---->>> Wrote \`"$INTAKES"\`"
 }
 
@@ -113,73 +111,67 @@ function make_docker_compose_file {
 		sed -i "s/20516/$START_PORT/g" "$DOCKER_COMPOSE"
 		sed -i "s/20566/$(( START_PORT + EXTRA_PORTS))/g" "$DOCKER_COMPOSE"
 	else
-		echo '---->>> Layout of docker-compose file has changed. This script must be updated'
+		echo '---->>> Layout of docker-compose template file has changed. This script must be updated'
 		echo '---->>> Aborting...'
 		exit 1
 	fi
 }
 
-function start_forwarder{
+function start_forwarder {
 	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
 	echo '---->>> Starting the forwarder...'
 	sudo docker compose up -d
 }
 
 function final_info {
+	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
 	echo "---->>> Intake file in use:"
 	cat "$INTAKES"
 	echo
 	echo "---->>> NOTE: Edit \`"$INTAKES"\` to change protocols or ports if required"
 }
 
-function run_engine {
-	declare -A steps=(
-		[initial_os_setup]="Initial setup of  sudo etc."
-		[docker_install]="Install Docker"
-		[install_sekoia_agent]="Install Sekoia agent"
-		[make_intake_file]="Configure ports and intake keys"
-		[make_docker_compose_file]="Prepare docker-compose file"
-		[start_fowarder]="Start fowarder"
+function runner {
+	ordered_steps=(
+		change_root_password
+		install_dependencies
+		docker_install
+		install_sekoia_agent
+		make_intake_file
+		make_docker_compose_file
+		start_forwarder
 	)
 
-	for fun in "${!steps[@]}"; do
-		echo "${steps[$fun]}"
-		read -rp "Run $fun? [y/N] " answer
-		[[ "$answer" =~ ^[Yy] ]] && "$fun"
+	for f in "${ordered_steps[@]}"; do
+		read -r -n1 -p "Run $f step? [y/n] " answer
+		echo
+		[[ "$answer" = [Yy] ]] && "$f"
+
 	done
 }
 
-if [ "$1" = "install" ]; then
+########################################
+# Main
+########################################
 
-	if [[ "$EUID" -eq 0 ]]; then
-		echo "ERROR: Do not run this script as root or with sudo."
-		exit 1
-	fi
+if [[ "$EUID" -eq 0 ]]; then
+	echo "ERROR: Do not run this script as root or with sudo."
+	exit 1
+fi
 
-	run_engine
+# run if user is in sudoers
+if [[ $(id | grep \(sudo\)) ]]; then
+	runner
 	final_info
 else
+	echo 'ERROR: User is not in sudoers'
 	echo
-	echo '========================================'
-	echo 'Sekoia Forwarder Setup'
-	echo '========================================'
+	echo ' 1) su -'
+	echo ' 2) apt install -y sudo'
+	echo " 3) usermod -aG sudo $(whoami)"
+	echo ' 4) exit'
+	echo ' 5) exit'
 	echo
-	echo 'Step 1. Change password'
-	echo '------------------------------'
-	echo 'Command: passwd'
-	echo
-	echo 'Step 2. Configure networking'
-	echo '------------------------------'
-	echo 'Edit IP, gateway and DNS of the existing interface.'
-	echo 'Command: sudo nano /etc/network/interfaces'
-	echo
-	echo 'Step 3. Update the system'
-	echo '------------------------------'
-	echo 'Command: sudo apt-get update -y && sudo apt-get upgrade -y'
-	echo
-	echo 'Step 4. Launch setup'
-	echo '------------------------------'
-	echo 'Command: ./setup.sh install'
-	echo
+	echo 'Log in and re-run this script'
 fi
 
