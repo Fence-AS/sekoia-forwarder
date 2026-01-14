@@ -12,8 +12,6 @@ DOCKER_COMPOSE_TEMPLATE_URL='https://raw.githubusercontent.com/SEKOIA-IO/sekoiai
 SEKOIA_AGENT=agent-latest
 SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
 
-EXTRA_PORTS=0 # updated by script
-
 function change_user_password {
 	echo "---->>> Change password of $(whoami)"
 	passwd 
@@ -92,7 +90,6 @@ function make_intake_file {
 			* ) echo; break ;;
 		esac
 	done
-	EXTRA_PORTS=$i
 
 	echo '---->>> Activating monitoring of forwarder logs'
 	read -r -p '  Sekoia.io forwarder logs intake key: ' intake_key
@@ -111,10 +108,12 @@ function make_docker_compose_file {
 	echo '---->>> Downloading docker-compose template...'
 	wget "$DOCKER_COMPOSE_TEMPLATE_URL"
 	grep -q '20516-20566:20516-20566' "$DOCKER_COMPOSE"
-	if [ $? -eq 0 ]; then
+	if [[ $? -eq 0 ]]; then
+		nr_of_ports=$(grep -c 'port:' "$INTAKES")
+		LAST_PORT=$(( START_PORT + nr_of_ports - 1 ))
 		echo '---->>> Modifying ports in docker-compose file to match intake file'
 		sed -i "s/20516/$START_PORT/g" "$DOCKER_COMPOSE"
-		sed -i "s/20566/$(( START_PORT + EXTRA_PORTS))/g" "$DOCKER_COMPOSE"
+		sed -i "s/20566/$LAST_PORT/g" "$DOCKER_COMPOSE"
 	else
 		echo '---->>> Layout of docker-compose template file has changed. This script must be updated'
 		echo '---->>> Aborting...'
