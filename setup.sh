@@ -5,20 +5,21 @@
 
 START_PORT=22001
 DEFAULT_PROTOCOL=tcp
-INSTALL_DEST=sekoiaio-concentrator
-INTAKES=intakes.yaml
-DOCKER_COMPOSE=docker-compose.yml
+BASE_DIR="$(pwd)"
+INSTALL_DEST="$BASE_DIR/sekoiaio-concentrator"
+INTAKES="intakes.yaml"
+DOCKER_COMPOSE="docker-compose.yml"
 DOCKER_COMPOSE_TEMPLATE_URL='https://raw.githubusercontent.com/SEKOIA-IO/sekoiaio-docker-concentrator/main/docker-compose/docker-compose.yml'
 SEKOIA_AGENT=agent-latest
 SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
 
 function change_user_password {
-	echo "---->>> Change password of $(whoami)"
+	echo "---->>> Change password of $USER"
 	passwd 
 }
 
 function change_root_password {
-	echo "---->>> Change password of user root (first enter sudo password of $(whoami))"
+	echo "---->>> Change password of user root (first enter sudo password of $USER)"
 	sudo passwd root
 }
 
@@ -27,7 +28,7 @@ function install_dependencies {
 	echo '---->>> Installing unattended upgrades...'
 	sudo apt-get install -y unattended-upgrades
 	echo '---->>> Installing prerequisite packages...'
-	sudo apt-get install -y ca-certificates curl gnupg lsb-release > /dev/null
+	sudo apt-get install -y ca-certificates curl gnupg lsb-release wget > /dev/null
 	echo '---->>> Installing auditd...'
 	sudo apt-get install -y auditd
 }
@@ -68,18 +69,23 @@ function install_sekoia_agent {
 }
 
 function make_intake_file {
-	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
 	mv  "$INTAKES" "$INTAKES".bck 2>/dev/null
 
 	echo '---->>> Configuring intakes'
 	echo -e "---\nintakes:" > "$INTAKES"
-	for i in {0..10000}; do
+	for i in {0..50}; do
 		echo '---->>> Add new intake'
 		read -r -p '  A descriptive name: ' intake_name
+		read -r -p "  Network protocol (tcp/udp default: $DEFAULT_PROTOCOL): " protocol_type
+
+		if [[ !( $protocol_type =~ ^(tcp|udp) ) ]]; then
+			protocol_type="$DEFAULT_PROTOCOL"
+		fi
+
 		read -r -p '  Sekoia intake key: ' intake_key
 		cat <<-EOF >> "$INTAKES"
-		- name: $(echo $intake_name | tr -s ' ' '-')
-		  protocol: $DEFAULT_PROTOCOL
+		- name: $(echo "$intake_name" | tr -s ' ' '-')
+		  protocol: $protocol_type
 		  port: $(( $START_PORT + i))
 		  intake_key: $intake_key
 		EOF
@@ -102,11 +108,10 @@ function make_intake_file {
 }
 
 function make_docker_compose_file {
-	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
 	mv  "$DOCKER_COMPOSE" "$DOCKER_COMPOSE".bck 2>/dev/null
 
 	echo '---->>> Downloading docker-compose template...'
-	wget "$DOCKER_COMPOSE_TEMPLATE_URL"
+	wget -O "$DOCKER_COMPOSE" "$DOCKER_COMPOSE_TEMPLATE_URL"
 	grep -q '20516-20566:20516-20566' "$DOCKER_COMPOSE"
 	if [[ $? -eq 0 ]]; then
 		nr_of_ports=$(grep -c 'port:' "$INTAKES")
@@ -122,13 +127,11 @@ function make_docker_compose_file {
 }
 
 function start_forwarder {
-	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
 	echo '---->>> Starting the forwarder...'
 	sudo docker compose up -d
 }
 
 function final_info {
-	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
 	echo "---->>> Intake file in use:"
 	cat "$INTAKES"
 	echo
@@ -136,6 +139,9 @@ function final_info {
 }
 
 function runner {
+	mkdir -p "$INSTALL_DEST"
+	cd "$INSTALL_DEST"
+
 	ordered_steps=(
 		change_user_password
 		change_root_password
@@ -147,10 +153,12 @@ function runner {
 		start_forwarder
 	)
 
-	for f in "${ordered_steps[@]}"; do
-		read -r -n1 -p "Run $f step? [y/n] " answer
-		echo
-		[[ "$answer" = [Yy] ]] && "$f"
+	for funct in "${ordered_steps[@]}"; do
+		read -r -p "Run step $funct? ([Y]/n): " answer
+		
+		if [[ "$answer" =~ ^[Yy] || -z "$answer" ]]; then
+			"$funct"
+		fi
 
 	done
 }
@@ -165,7 +173,7 @@ if [[ "$EUID" -eq 0 ]]; then
 fi
 
 # run if user is in sudoers
-if [[ $(id | grep \(sudo\)) ]]; then
+if id -nG "$USER" | grep -qw sudo; then
 	runner
 	final_info
 else
@@ -173,7 +181,7 @@ else
 	echo
 	echo ' 1) su -'
 	echo ' 2) apt install -y sudo'
-	echo " 3) usermod -aG sudo $(whoami)"
+	echo " 3) usermod -aG sudo $USER"
 	echo ' 4) exit'
 	echo ' 5) exit'
 	echo
