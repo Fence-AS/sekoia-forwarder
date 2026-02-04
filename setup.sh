@@ -5,20 +5,21 @@
 
 START_PORT=22001
 DEFAULT_PROTOCOL=tcp
-INSTALL_DEST=sekoiaio-concentrator
-INTAKES=intakes.yaml
-DOCKER_COMPOSE=docker-compose.yml
+BASE_DIR="$(pwd)"
+INSTALL_DEST="$BASE_DIR/sekoiaio-concentrator"
+INTAKES="intakes.yaml"
+DOCKER_COMPOSE="docker-compose.yml"
 DOCKER_COMPOSE_TEMPLATE_URL='https://raw.githubusercontent.com/SEKOIA-IO/sekoiaio-docker-concentrator/main/docker-compose/docker-compose.yml'
 SEKOIA_AGENT=agent-latest
 SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
 
 function change_user_password {
-	echo "---->>> Change password of $(whoami)"
+	echo "---->>> Change password of user '$USER'"
 	passwd 
 }
 
 function change_root_password {
-	echo "---->>> Change password of user root (first enter sudo password of $(whoami))"
+	echo "---->>> Change password of user 'root' (first enter sudo password of user '$USER')"
 	sudo passwd root
 }
 
@@ -27,7 +28,7 @@ function install_dependencies {
 	echo '---->>> Installing unattended upgrades...'
 	sudo apt-get install -y unattended-upgrades
 	echo '---->>> Installing prerequisite packages...'
-	sudo apt-get install -y ca-certificates curl gnupg lsb-release > /dev/null
+	sudo apt-get install -y ca-certificates curl gnupg lsb-release wget > /dev/null
 	echo '---->>> Installing auditd...'
 	sudo apt-get install -y auditd
 }
@@ -60,6 +61,8 @@ function install_sekoia_agent {
 	echo '---->>> Installing Sekoia Endpoint Agent...'
 	sudo systemctl stop auditd
 	sudo systemctl disable auditd
+	
+	# setup Sekoia agent with intake key
 	read -p 'Sekoia endpoint agent intake key: ' agent_key
 	chmod +x ./"$SEKOIA_AGENT"
 	sudo ./"$SEKOIA_AGENT" install --intake-key "$agent_key"
@@ -68,30 +71,50 @@ function install_sekoia_agent {
 }
 
 function make_intake_file {
-	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
+	echo '---->>> Configuring intakes'
 	mv  "$INTAKES" "$INTAKES".bck 2>/dev/null
 
-	echo '---->>> Configuring intakes'
+	# format file
 	echo -e "---\nintakes:" > "$INTAKES"
-	for i in {0..10000}; do
+
+	for i in {0..50}; do
 		echo '---->>> Add new intake'
+
+		# set name 
 		read -r -p '  A descriptive name: ' intake_name
+		
+		# set protocol and calculate port
+		read -r -p "  Network protocol to use, default is $DEFAULT_PROTOCOL (tcp/udp): " protocol_type
+
+		if [[ !( $protocol_type =~ ^(tcp|udp) ) ]]; then
+			protocol_type="$DEFAULT_PROTOCOL"
+		fi
+
+		current_port=$(( $START_PORT + i))
+
+		# set intake key
 		read -r -p '  Sekoia intake key: ' intake_key
+
+		# write changes
 		cat <<-EOF >> "$INTAKES"
-		- name: $(echo $intake_name | tr -s ' ' '-')
-		  protocol: $DEFAULT_PROTOCOL
-		  port: $(( $START_PORT + i))
+		- name: $(echo "$intake_name" | tr -s ' ' '-')
+		  protocol: $protocol_type
+		  port: $current_port
 		  intake_key: $intake_key
 		EOF
-		echo
-		read -r -n1 -p 'More intakes? (y/n): ' answer
-		case "$answer" in
-			[Yy] ) echo; echo; continue ;;
-			* ) echo; break ;;
-		esac
+
+		echo "Added intake $intake_name ($current_port/$protocol_type)"
+		sleep 0.5
+		
+		# break loop if more intakes are not needed
+		read -r -p 'More intakes? (y/[N]): ' answer
+		if [[ !("$answer" =~ ^[Yy]) ]]; then
+			break
+		fi
 	done
 
 	echo '---->>> Activating monitoring of forwarder logs'
+	sleep 0.5
 	read -r -p '  Sekoia.io forwarder logs intake key: ' intake_key
 	cat <<-EOF >> "$INTAKES"
 	- name: Monitoring
@@ -99,15 +122,15 @@ function make_intake_file {
 	  intake_key: $intake_key
 	EOF
 	echo "---->>> Wrote \`"$INTAKES"\`"
+	sleep 0.5
 }
 
 function make_docker_compose_file {
-	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
-	mv  "$DOCKER_COMPOSE" "$DOCKER_COMPOSE".bck 2>/dev/null
-
 	echo '---->>> Downloading docker-compose template...'
-	wget "$DOCKER_COMPOSE_TEMPLATE_URL"
+	mv  "$DOCKER_COMPOSE" "$DOCKER_COMPOSE".bck 2>/dev/null
+	wget -O "$DOCKER_COMPOSE" "$DOCKER_COMPOSE_TEMPLATE_URL"
 	grep -q '20516-20566:20516-20566' "$DOCKER_COMPOSE"
+	
 	if [[ $? -eq 0 ]]; then
 		nr_of_ports=$(grep -c 'port:' "$INTAKES")
 		LAST_PORT=$(( START_PORT + nr_of_ports - 1 ))
@@ -122,24 +145,36 @@ function make_docker_compose_file {
 }
 
 function start_forwarder {
-	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
 	echo '---->>> Starting the forwarder...'
 	sudo docker compose up -d
 }
 
 function final_info {
-	mkdir -p "$INSTALL_DEST" && cd "$INSTALL_DEST"
 	echo "---->>> Intake file in use:"
 	cat "$INTAKES"
-	echo
-	echo "---->>> NOTE: Edit \`"$INTAKES"\` to change protocols or ports if required"
+	echo; echo; echo
+	sleep 0.5
+	echo "---->>> NOTE: Edit \`"$INTAKES"\` to modify protocols, ports, intakes."
 }
 
-function runner {
-	ordered_steps=(
+function execute_steps {
+	for funct in "$@"; do
+		read -r -p "Run step $funct? ([Y]/n): " answer
+		
+		# accepts y, Y, and [ENTER] (empty)
+		if [[ "$answer" =~ ^[Yy] || -z "$answer" ]]; then
+			"$funct"
+		fi
+	done 
+}
+
+function setup {
+	debian=(
 		change_user_password
 		change_root_password
-		install_dependencies
+	)
+
+	docker_sekoia=(
 		docker_install
 		install_sekoia_agent
 		make_intake_file
@@ -147,12 +182,16 @@ function runner {
 		start_forwarder
 	)
 
-	for f in "${ordered_steps[@]}"; do
-		read -r -n1 -p "Run $f step? [y/n] " answer
-		echo
-		[[ "$answer" = [Yy] ]] && "$f"
+	# create install dir
+	mkdir -p "$INSTALL_DEST"
+	cd "$INSTALL_DEST"
 
-	done
+	# verify Debian state
+	execute_steps "${debian[@]}"
+
+	# install docker & sekoia deps before setup
+	install_dependencies
+	execute_steps "${docker_sekoia[@]}"
 }
 
 ########################################
@@ -160,23 +199,29 @@ function runner {
 ########################################
 
 if [[ "$EUID" -eq 0 ]]; then
-	echo "ERROR: Do not run this script as root or with sudo."
+	echo "ERROR: Do not run this script as 'root' or with 'sudo'!"
+	echo "         Run 'bash setup.sh' as user with sudo privileges."
 	exit 1
 fi
 
 # run if user is in sudoers
-if [[ $(id | grep \(sudo\)) ]]; then
-	runner
+if id -nG "$USER" | grep -qw sudo; then
+	setup
 	final_info
 else
-	echo 'ERROR: User is not in sudoers'
+	echo 'ERROR: User is not in sudoers group!'
 	echo
-	echo ' 1) su -'
-	echo ' 2) apt install -y sudo'
-	echo " 3) usermod -aG sudo $(whoami)"
-	echo ' 4) exit'
-	echo ' 5) exit'
+	echo ' 1) Login to root:'
+	echo '      su -'
+	echo ' 2) Install sudo:'
+	echo '      apt install sudo -y'
+	echo " 3) Add $USER to sudo group:"
+	echo "      usermod -aG sudo $USER"
+	echo " 4) Logout of root and then $USER"
+	echo '      exit'
+	echo '      exit'
+	echo " 5) login as $USER"
+	echo ' 6) re-run this script'
 	echo
-	echo 'Log in and re-run this script'
 fi
 
