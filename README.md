@@ -7,7 +7,7 @@ Automates the installation and guides the user through the configuration of the 
 ### Networking
 
 - _INBOUND TCP/UDP_ flows from systems/apps to the forwarder on the ports of your choice
-- _OUTBOUND TCP_ flow to `intake.sekoia.io` (FRA1) on port `10514`
+- _OUTBOUND TCP_ flow to `intake.sekoia.io` (FRA1) on port `10514` (IP: `213.32.5.228`)
 
 ### System
 
