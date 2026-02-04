@@ -66,7 +66,7 @@ function install_sekoia_agent {
 	read -p 'Sekoia endpoint agent intake key: ' agent_key
 	chmod +x ./"$SEKOIA_AGENT"
 	sudo ./"$SEKOIA_AGENT" install --intake-key "$agent_key"
-	sudo systemctl status SEKOIAEndpointAgent.service
+	sudo systemctl status SEKOIAEndpointAgent.service --no-pager
 	rm "$SEKOIA_AGENT"
 }
 
