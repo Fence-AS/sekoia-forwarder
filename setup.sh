@@ -56,18 +56,41 @@ function docker_install {
 }
 
 function install_sekoia_agent {
-	echo '---->>> Downloading Sekoia Endpoint Agent...'
-	wget "$SEKOIA_AGENT_URL"
-	echo '---->>> Installing Sekoia Endpoint Agent...'
+	if systemctl is-active --quiet SEKOIAEndpointAgent.service; then
+		echo "---->>> Sekoia Endpoint Agent already running, skipping install."
+		return
+	fi
+
+	if [[ -f ./"$SEKOIA_AGENT" ]]; then
+		echo "---->>> Sekoia Endpoint Agent installer already exists, remove '$SEKOIA_AGENT' to re-download!"
+	else
+		echo "---->>> Downloading Sekoia Endpoint Agent..."
+		wget "$SEKOIA_AGENT_URL" -O ./"$SEKOIA_AGENT"
+		if [[ ! -f ./"$SEKOIA_AGENT" ]]; then
+			echo "---->>> Sekoia Endpoint Agent download failed, skipping install."
+			return
+		fi
+	fi
+
+	if [[ -f "/opt/endpoint-agent/agent" ]]; then
+		echo "---->>> Sekoia Endpoint Agent is already installed! Verify with 'systemctl status SEKOIAEndpointAgent.service'."
+	else
+		echo "---->>> Installing Sekoia Endpoint Agent..."
+		
+		if systemctl is-active --quiet auditd; then
+			echo "---->>> auditd will be stopped and disabled for agent compatibility."
 	sudo systemctl stop auditd
 	sudo systemctl disable auditd
+		fi
 	
 	# setup Sekoia agent with intake key
-	read -p 'Sekoia endpoint agent intake key: ' agent_key
+		read -r -p "Sekoia endpoint agent intake key: " agent_key
 	chmod +x ./"$SEKOIA_AGENT"
 	sudo ./"$SEKOIA_AGENT" install --intake-key "$agent_key"
 	sudo systemctl status SEKOIAEndpointAgent.service --no-pager
 	rm "$SEKOIA_AGENT"
+	fi
+}
 }
 
 function make_intake_file {
@@ -81,7 +104,7 @@ function make_intake_file {
 		echo "---->>> Add new intake"
 
 		# set name 
-		read -r -p '  A descriptive name: ' intake_name
+		read -r -p "  A descriptive name: " intake_name
 		
 		# set protocol and calculate port
 		read -r -p "  Network protocol to use, default is $DEFAULT_PROTOCOL (tcp/udp): " protocol_type
@@ -93,7 +116,7 @@ function make_intake_file {
 		current_port=$(( $START_PORT + i))
 
 		# set intake key
-		read -r -p '  Sekoia intake key: ' intake_key
+		read -r -p "  Sekoia intake key: " intake_key
 
 		# write changes
 		cat <<-EOF >> "$INTAKES"
@@ -107,7 +130,7 @@ function make_intake_file {
 		sleep 0.5
 		
 		# break loop if more intakes are not needed
-		read -r -p 'More intakes? (y/[N]): ' answer
+		read -r -p "More intakes? (y/[N]): " answer
 		if [[ !("$answer" =~ ^[Yy]) ]]; then
 			break
 		fi
@@ -115,7 +138,7 @@ function make_intake_file {
 
 	echo "---->>> Activating monitoring of forwarder logs"
 	sleep 0.5
-	read -r -p '  Sekoia.io forwarder logs intake key: ' intake_key
+	read -r -p "  Sekoia.io forwarder logs intake key: " intake_key
 	cat <<-EOF >> "$INTAKES"
 	- name: Monitoring
 	  stats: True
@@ -129,12 +152,12 @@ function make_docker_compose_file {
 	echo "---->>> Downloading docker-compose template..."
 	mv  "$DOCKER_COMPOSE" "$DOCKER_COMPOSE".bck 2>/dev/null
 	wget -O "$DOCKER_COMPOSE" "$DOCKER_COMPOSE_TEMPLATE_URL"
-	grep -q '20516-20566:20516-20566' "$DOCKER_COMPOSE"
+	grep -q "20516-20566:20516-20566" "$DOCKER_COMPOSE"
 	
 	if [[ $? -eq 0 ]]; then
-		nr_of_ports=$(grep -c 'port:' "$INTAKES")
+		nr_of_ports=$(grep -c "port:" "$INTAKES")
 		LAST_PORT=$(( START_PORT + nr_of_ports - 1 ))
-		echo '---->>> Modifying ports in docker-compose file to match intake file'
+		echo "---->>> Modifying ports in docker-compose file to match intake file"
 		sed -i "s/20516/$START_PORT/g" "$DOCKER_COMPOSE"
 		sed -i "s/20566/$LAST_PORT/g" "$DOCKER_COMPOSE"
 	else
