@@ -108,6 +108,7 @@ function make_intake_file {
 
 		# set name 
 		read -r -p "  A descriptive name: " intake_name
+		intake_name_clean="${intake_name// /-}"
 		
 		# set protocol and calculate port
 		read -r -p "  Network protocol to use, default is $DEFAULT_PROTOCOL (tcp/udp): " protocol_type
@@ -123,7 +124,7 @@ function make_intake_file {
 
 		# write changes
 		cat <<-EOF >> "$INTAKES"
-		- name: "$( parse_input_to_yaml "$(echo "$intake_name" | tr -s ' ' '-')" )"
+		- name: "$( parse_input_to_yaml "$intake_name_clean" )"
 		  protocol: "$( parse_input_to_yaml "$protocol_type" )"
 		  port: $current_port
 		  intake_key: "$( parse_input_to_yaml "$intake_key" )"
