@@ -25,9 +25,9 @@ function change_root_password {
 
 function install_dependencies {
 	sudo apt-get update > /dev/null
-	echo '---->>> Installing unattended upgrades...'
+	echo "---->>> Installing unattended upgrades..."
 	sudo apt-get install -y unattended-upgrades
-	echo '---->>> Installing prerequisite packages...'
+	echo "---->>> Installing prerequisite packages..."
 	sudo apt-get install -y ca-certificates curl gnupg lsb-release wget > /dev/null
 	echo '---->>> Installing auditd...'
 	sudo apt-get install -y auditd
@@ -36,12 +36,12 @@ function install_dependencies {
 function docker_install {
 	# from https://docs.sekoia.io/integration/ingestion_methods/sekoiaio_forwarder/#5-minutes-setup-on-debian
 	sudo apt-get update > /dev/null
-	sudo apt-get remove docker docker-engine docker.io containerd runc > /dev/null
-	echo '---->>> Old docker version deleted'
+	sudo apt-get remove -y docker docker-engine docker.io containerd runc > /dev/null
+	echo "---->>> Old docker version deleted"
 
 	sudo mkdir -m 0755 -p /etc/apt/keyrings
 	curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-	echo '---->>> Docker GPG key collected'
+	echo "---->>> Docker GPG key collected"
 
 	echo \
 	  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
@@ -50,7 +50,7 @@ function docker_install {
 
 	sudo apt-get update > /dev/null
 	sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin > /dev/null
-	echo '---->>> Docker packages intalled'
+	echo "---->>> Docker packages installed"
 
 	sudo docker run hello-world
 }
@@ -71,14 +71,14 @@ function install_sekoia_agent {
 }
 
 function make_intake_file {
-	echo '---->>> Configuring intakes'
+	echo "---->>> Configuring intakes"
 	mv  "$INTAKES" "$INTAKES".bck 2>/dev/null
 
 	# format file
 	echo -e "---\nintakes:" > "$INTAKES"
 
 	for i in {0..50}; do
-		echo '---->>> Add new intake'
+		echo "---->>> Add new intake"
 
 		# set name 
 		read -r -p '  A descriptive name: ' intake_name
@@ -113,7 +113,7 @@ function make_intake_file {
 		fi
 	done
 
-	echo '---->>> Activating monitoring of forwarder logs'
+	echo "---->>> Activating monitoring of forwarder logs"
 	sleep 0.5
 	read -r -p '  Sekoia.io forwarder logs intake key: ' intake_key
 	cat <<-EOF >> "$INTAKES"
@@ -126,7 +126,7 @@ function make_intake_file {
 }
 
 function make_docker_compose_file {
-	echo '---->>> Downloading docker-compose template...'
+	echo "---->>> Downloading docker-compose template..."
 	mv  "$DOCKER_COMPOSE" "$DOCKER_COMPOSE".bck 2>/dev/null
 	wget -O "$DOCKER_COMPOSE" "$DOCKER_COMPOSE_TEMPLATE_URL"
 	grep -q '20516-20566:20516-20566' "$DOCKER_COMPOSE"
@@ -138,14 +138,14 @@ function make_docker_compose_file {
 		sed -i "s/20516/$START_PORT/g" "$DOCKER_COMPOSE"
 		sed -i "s/20566/$LAST_PORT/g" "$DOCKER_COMPOSE"
 	else
-		echo '---->>> Layout of docker-compose template file has changed. This script must be updated'
-		echo '---->>> Aborting...'
+		echo "---->>> Layout of docker-compose template file has changed. This script must be updated"
+		echo "---->>> Aborting..."
 		exit 1
 	fi
 }
 
 function start_forwarder {
-	echo '---->>> Starting the forwarder...'
+	echo "---->>> Starting the forwarder..."
 	sudo docker compose up -d
 }
 
@@ -209,19 +209,19 @@ if id -nG "$USER" | grep -qw sudo; then
 	setup
 	final_info
 else
-	echo 'ERROR: User is not in sudoers group!'
+	echo "ERROR: User is not in sudoers group!"
 	echo
-	echo ' 1) Login to root:'
-	echo '      su -'
-	echo ' 2) Install sudo:'
-	echo '      apt install sudo -y'
-	echo " 3) Add $USER to sudo group:"
-	echo "      usermod -aG sudo $USER"
-	echo " 4) Logout of root and then $USER"
-	echo '      exit'
-	echo '      exit'
-	echo " 5) login as $USER"
-	echo ' 6) re-run this script'
+	echo " 1) Login to root:"
+	echo "      su -"
+	echo " 2) Install sudo:"
+	echo "      apt install sudo -y"
+	echo " 3) Add '$USER' to sudo group:"
+	echo "      usermod -aG sudo '$USER'"
+	echo " 4) Logout of root and then '$USER'"
+	echo "      exit"
+	echo "      exit"
+	echo " 5) login as '$USER'"
+	echo " 6) re-run this script"
 	echo
 fi
 

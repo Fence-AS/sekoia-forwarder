@@ -7,7 +7,7 @@ Automates the installation and guides the user through the configuration of the 
 ### Networking
 
 - _INBOUND TCP/UDP_ flows from systems/apps to the forwarder on the ports of your choice
-- _OUTBOUND TCP_ flow to `intake.sekoia.io` (FRA1) on port `10514` (IP: `213.32.5.228`)
+- _OUTBOUND TCP_ flow to `intake.sekoia.io` (FRA1) on port `10514` (only use the IP if absolutely necessary: `213.32.5.228`)
 
 ### System
 
@@ -42,11 +42,10 @@ bash setup.sh
 > - Add the forwarder user: `usermod -aG sudo <USERNAME>`
 > - Log out and back in for changes to take effect.
 
-During execution, the script prompts for confirmation to run the following steps:
+During execution, the script automatically installs required dependencies and prompts for confirmation to run the following steps:
 
 - Change the user password
 - Change the root password
-- Install required dependencies
 - Install Docker
 - Install the Sekoia agent
 - Configure intakes and forwarder monitoring
