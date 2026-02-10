@@ -77,19 +77,23 @@ function install_sekoia_agent {
 		
 		if systemctl is-active --quiet auditd; then
 			echo "---->>> auditd will be stopped and disabled for agent compatibility."
-	sudo systemctl stop auditd
-	sudo systemctl disable auditd
+			sudo systemctl stop auditd
+			sudo systemctl disable auditd
 		fi
-	
-	# setup Sekoia agent with intake key
+
+		# setup Sekoia agent with intake key
 		read -r -p "Sekoia endpoint agent intake key: " agent_key
-	chmod +x ./"$SEKOIA_AGENT"
-	sudo ./"$SEKOIA_AGENT" install --intake-key "$agent_key"
-	sudo systemctl status SEKOIAEndpointAgent.service --no-pager
-	rm "$SEKOIA_AGENT"
+		chmod +x ./"$SEKOIA_AGENT"
+		sudo ./"$SEKOIA_AGENT" install --intake-key "$agent_key"
+		sudo systemctl status SEKOIAEndpointAgent.service --no-pager
+		rm "$SEKOIA_AGENT"
 	fi
 }
+
+function parse_input_to_yaml() {
+	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
+
 
 function make_intake_file {
 	echo "---->>> Configuring intakes"
@@ -107,7 +111,7 @@ function make_intake_file {
 		# set protocol and calculate port
 		read -r -p "  Network protocol to use, default is $DEFAULT_PROTOCOL (tcp/udp): " protocol_type
 
-		if [[ !( $protocol_type =~ ^(tcp|udp) ) ]]; then
+		if [[ !( $protocol_type =~ ^(tcp|udp)$ ) ]]; then
 			protocol_type="$DEFAULT_PROTOCOL"
 		fi
 
@@ -118,10 +122,10 @@ function make_intake_file {
 
 		# write changes
 		cat <<-EOF >> "$INTAKES"
-		- name: $(echo "$intake_name" | tr -s ' ' '-')
-		  protocol: $protocol_type
+		- name: "$( parse_input_to_yaml "$(echo "$intake_name" | tr -s ' ' '-')" )"
+		  protocol: "$( parse_input_to_yaml "$protocol_type" )"
 		  port: $current_port
-		  intake_key: $intake_key
+		  intake_key: "$( parse_input_to_yaml "$intake_key" )"
 		EOF
 
 		echo "Added intake $intake_name ($current_port/$protocol_type)"
@@ -140,7 +144,7 @@ function make_intake_file {
 	cat <<-EOF >> "$INTAKES"
 	- name: Monitoring
 	  stats: True
-	  intake_key: $intake_key
+	  intake_key: "$(parse_input_to_yaml "$intake_key")"
 	EOF
 	echo "---->>> Wrote \`"$INTAKES"\`"
 	sleep 0.5
@@ -156,8 +160,8 @@ function make_docker_compose_file {
 		nr_of_ports=$(grep -c "port:" "$INTAKES")
 		LAST_PORT=$(( START_PORT + nr_of_ports - 1 ))
 		echo "---->>> Modifying ports in docker-compose file to match intake file"
-		sed -i "s/20516/$START_PORT/g" "$DOCKER_COMPOSE"
-		sed -i "s/20566/$LAST_PORT/g" "$DOCKER_COMPOSE"
+		sed -i "s/20516-/$START_PORT-/g" "$DOCKER_COMPOSE"
+		sed -i "s/-20566/-$LAST_PORT/g" "$DOCKER_COMPOSE"
 	else
 		echo "---->>> Layout of docker-compose template file has changed. This script must be updated"
 		echo "---->>> Aborting..."
