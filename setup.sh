@@ -29,8 +29,6 @@ function install_dependencies {
 	sudo apt-get install -y unattended-upgrades
 	echo "---->>> Installing prerequisite packages..."
 	sudo apt-get install -y ca-certificates curl gnupg lsb-release wget > /dev/null
-	echo '---->>> Installing auditd...'
-	sudo apt-get install -y auditd
 }
 
 function docker_install {
