@@ -60,14 +60,15 @@ function install_sekoia_agent {
 	fi
 
 	if [[ -f ./"$SEKOIA_AGENT" ]]; then
-		echo "---->>> Sekoia Endpoint Agent installer already exists, remove '$SEKOIA_AGENT' to re-download!"
-	else
-		echo "---->>> Downloading Sekoia Endpoint Agent..."
-		wget "$SEKOIA_AGENT_URL" -O ./"$SEKOIA_AGENT"
-		if [[ ! -f ./"$SEKOIA_AGENT" ]]; then
-			echo "---->>> Sekoia Endpoint Agent download failed, skipping install."
-			return
-		fi
+		echo "---->>> Sekoia Endpoint Agent installer already exists, removing..."
+		rm -f ./"$SEKOIA_AGENT"
+	fi
+
+	echo "---->>> Downloading Sekoia Endpoint Agent..."
+	if ! wget -O ./"$SEKOIA_AGENT" "$SEKOIA_AGENT_URL"; then
+		echo "---->>> Sekoia Endpoint Agent download failed, skipping install."
+		rm -f ./"$SEKOIA_AGENT"
+		return
 	fi
 
 	if [[ -f "/opt/endpoint-agent/agent" ]]; then
