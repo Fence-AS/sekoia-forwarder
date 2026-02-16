@@ -27,7 +27,7 @@ function display_welcome {
 |_|  \___/|_|    \_/\_/ \__,_|_|  \__,_|\___|_|  
 
 EOF
-echo "> Default choices are shown in brackets (e.g. ([Y]/n)' means Y or y is default)."
+echo "> Default choices are shown in brackets ([Y]/n = default Yes, y/[N] = default No)."
 echo "> Remember to set a static IP address! (via DHCP or in Debian)"
 echo && read -r -p "---->>> Start Sekoia Forwarder installation? (y/[N]): " answer
 
@@ -37,17 +37,17 @@ fi
 }
 
 function change_user_password {
-	echo "---->>> Change password of user '$USER'"
+	echo "---->>> Change password for user '$USER'"
 	passwd 
 }
 
 function change_root_password {
-	echo "---->>> Change password of user 'root' (first enter sudo password of user '$USER')"
+	echo "---->>> Change password doe 'root' user (first enter the sudo password for user '$USER')"
 	sudo passwd root
 }
 
 function install_dependencies {
-	echo "---->>> Installing dependencies; a 'sudo' password prompt might appear"
+	echo "---->>> Installing dependencies; a sudo password prompt might appear"
 	sudo apt-get update > /dev/null
 	echo "---->>> Installing unattended upgrades..."
 	sudo apt-get install -y unattended-upgrades
@@ -59,16 +59,16 @@ function docker_install {
 	# from https://docs.sekoia.io/integration/ingestion_methods/sekoiaio_forwarder/#5-minutes-setup-on-debian
 	sudo apt-get update > /dev/null
 	sudo apt-get remove -y docker docker-engine docker.io containerd runc > /dev/null
-	echo "---->>> Old docker version deleted"
+	echo "---->>> Old docker versions removed"
 
 	sudo mkdir -m 0755 -p /etc/apt/keyrings
 	curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-	echo "---->>> Docker GPG key collected"
+	echo "---->>> Docker GPG key added"
 
 	echo \
 	  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
 	  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-	echo "---->>> Repository updated, ready to start docker installation"
+	echo "---->>> Repository updated, ready to start Docker installation"
 
 	sudo apt-get update > /dev/null
 	sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin > /dev/null
@@ -209,7 +209,7 @@ function final_info {
 	cat "$INTAKES"
 	echo; echo; echo
 	sleep 0.5
-	echo "---->>> NOTE: Edit \`"$INTAKES"\` to modify protocols, ports, intakes."
+	echo "---->>> NOTE: Edit \`"$INTAKES"\` to modify protocols, ports, and intakes."
 }
 
 function execute_steps {
@@ -273,17 +273,17 @@ if id -nG "$USER" | grep -qw sudo; then
 else
 	echo "ERROR: User is not in sudoers group!"
 	echo
-	echo " 1) Login to root:"
+	echo " 1) Login as root:"
 	echo "      su -"
 	echo " 2) Install sudo:"
 	echo "      apt install sudo -y"
 	echo " 3) Add '$USER' to sudo group:"
 	echo "      usermod -aG sudo '$USER'"
-	echo " 4) Logout of root and then '$USER'"
+	echo " 4) Log out from root and then from '$USER'"
 	echo "      exit"
 	echo "      exit"
-	echo " 5) login as '$USER'"
-	echo " 6) re-run this script"
+	echo " 5) Log in as '$USER'"
+	echo " 6) Re-run this script"
 	echo
 fi
 
