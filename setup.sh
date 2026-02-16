@@ -47,6 +47,7 @@ function change_root_password {
 }
 
 function install_dependencies {
+	echo "---->>> Installing dependencies; a 'sudo' password prompt might appear"
 	sudo apt-get update > /dev/null
 	echo "---->>> Installing unattended upgrades..."
 	sudo apt-get install -y unattended-upgrades
@@ -221,6 +222,7 @@ function setup {
 	debian=(
 		change_user_password
 		change_root_password
+		install_dependencies
 	)
 
 	docker_sekoia=(
