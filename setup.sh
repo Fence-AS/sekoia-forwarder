@@ -13,6 +13,29 @@ DOCKER_COMPOSE_TEMPLATE_URL='https://raw.githubusercontent.com/SEKOIA-IO/sekoiai
 SEKOIA_AGENT=agent-latest
 SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
 
+function display_welcome {
+	cat <<'EOF'
+          _         _       
+ ___  ___| | _____ (_) __ _ 
+/ __|/ _ \ |/ / _ \| |/ _` |
+\__ \  __/   < (_) | | (_| |
+|___/\___|_|\_\___/|_|\__,_|
+  __                                  _           
+ / _| ___  _ ____      ____ _ _ __ __| | ___ _ __ 
+| |_ / _ \| '__\ \ /\ / / _` | '__/ _` |/ _ \ '__|
+|  _| (_) | |   \ V  V / (_| | | | (_| |  __/ |   
+|_|  \___/|_|    \_/\_/ \__,_|_|  \__,_|\___|_|  
+
+EOF
+echo "> Default choices are shown in brackets (e.g. ([Y]/n)' means Y or y is default)."
+echo "> Remember to set a static IP address! (via DHCP or in Debian)"
+echo && read -r -p "---->>> Start Sekoia Forwarder installation? (y/[N]): " answer
+
+if [[ "$answer" =~ ^[Nn] || -z "$answer" ]]; then
+	exit
+fi
+}
+
 function change_user_password {
 	echo "---->>> Change password of user '$USER'"
 	passwd 
@@ -94,7 +117,6 @@ function install_sekoia_agent {
 function parse_input_to_yaml() {
 	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
-
 
 function make_intake_file {
 	echo "---->>> Configuring intakes"
@@ -230,6 +252,8 @@ if [[ "$EUID" -eq 0 ]]; then
 	echo "         Run 'bash setup.sh' as user with sudo privileges."
 	exit 1
 fi
+
+display_welcome
 
 # run if user is in sudoers
 if id -nG "$USER" | grep -qw sudo; then
