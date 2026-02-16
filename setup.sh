@@ -200,6 +200,11 @@ function start_forwarder {
 }
 
 function final_info {
+	if [[ ! -d "$INSTALL_DEST" ]]; then
+		echo "---->>> No Sekoia Forwarder installation path found!"
+		exit 1
+	fi
+
 	echo "---->>> Intake file in use:"
 	cat "$INTAKES"
 	echo; echo; echo
@@ -210,7 +215,7 @@ function final_info {
 function execute_steps {
 	for funct in "$@"; do
 		read -r -p "Run step $funct? ([Y]/n): " answer
-		
+		sleep 0.5
 		# accepts y, Y, and [ENTER] (empty)
 		if [[ "$answer" =~ ^[Yy] || -z "$answer" ]]; then
 			"$funct"
@@ -233,15 +238,19 @@ function setup {
 		start_forwarder
 	)
 
+	# verify Debian state
+	echo "---->>> Configuring Debian settings..."
+	sleep 1
+	execute_steps "${debian[@]}"
+
+	echo "---->>> Installing Docker and Sekoia Forwarder..."
+	sleep 1
+
 	# create install dir
 	mkdir -p "$INSTALL_DEST"
 	cd "$INSTALL_DEST"
 
-	# verify Debian state
-	execute_steps "${debian[@]}"
-
-	# install docker & sekoia deps before setup
-	install_dependencies
+	# install docker and forwarder
 	execute_steps "${docker_sekoia[@]}"
 }
 
