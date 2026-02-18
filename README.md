@@ -6,8 +6,8 @@ Automates the installation and guides the user through the configuration of the 
 
 ### Networking
 
-- _INBOUND TCP/UDP_ flows from systems/apps to the forwarder on the ports of your choice
-- _OUTBOUND TCP_ flow to `intake.sekoia.io` (FRA1) on port `10514`
+- _INBOUND TCP/UDP_ flows from systems and applications to the forwarder on the ports of your choice
+- _OUTBOUND TCP_ flow to `intake.sekoia.io` (FRA1) on port `10514` (only use the IP if absolutely necessary: `213.32.5.228`)
 
 ### System
 
@@ -19,7 +19,7 @@ Minimal recommended system requirements (1000 assets across all intakes):
 
 > _More information here: [https://docs.sekoia.io/integration/ingestion_methods/syslog/sekoiaio_forwarder/#prerequisites](https://docs.sekoia.io/integration/ingestion_methods/syslog/sekoiaio_forwarder/#prerequisites)_
 
-It must be run on a Debian (or Debian-based) distribution (amd64/x86-64). _We recommend a minimal software installation of Debian 13._
+This setup script must run on Debian (or a Debian-based) amd64/x86-64 system. _We recommend a minimal software installation of Debian 13._
 
 - Download the `netinst` (recommended) ISO here: [https://www.debian.org/download](https://www.debian.org/download)
 
@@ -46,7 +46,7 @@ During execution, the script prompts for confirmation to run the following steps
 
 - Change the user password
 - Change the root password
-- Install required dependencies
+- Install dependencies
 - Install Docker
 - Install the Sekoia agent
 - Configure intakes and forwarder monitoring
