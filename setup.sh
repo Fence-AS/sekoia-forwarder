@@ -39,20 +39,23 @@ fi
 function change_user_password {
 	echo "---->>> Change password for user '$USER'"
 	passwd 
+	echo "-->>> Password for user '$USER' has been changed."
 }
 
 function change_root_password {
-	echo "---->>> Change password doe 'root' user (first enter the sudo password for user '$USER')"
+	echo "---->>> Change password for 'root' user (first enter the sudo password for user '$USER')"
 	sudo passwd root
+	echo "-->>> Password for user 'root' has been changed."
 }
 
 function install_dependencies {
 	echo "---->>> Installing dependencies; a sudo password prompt might appear"
 	sudo apt-get update > /dev/null
 	echo "---->>> Installing unattended upgrades..."
-	sudo apt-get install -y unattended-upgrades
+	sudo apt-get install -y unattended-upgrades > /dev/null
 	echo "---->>> Installing prerequisite packages..."
 	sudo apt-get install -y ca-certificates curl gnupg lsb-release wget > /dev/null
+	echo "-->>> Dependencies and prerequisite packages installed."
 }
 
 function docker_install {
@@ -75,6 +78,7 @@ function docker_install {
 	echo "---->>> Docker packages installed"
 
 	sudo docker run hello-world
+	echo "-->>> Docker installed and verified."
 }
 
 function install_sekoia_agent {
@@ -113,6 +117,7 @@ function install_sekoia_agent {
 		sudo systemctl status SEKOIAEndpointAgent.service --no-pager
 		rm "$SEKOIA_AGENT"
 	fi
+	echo "-->>> Sekoia Endpoint Agent installation step complete."
 }
 
 function parse_input_to_yaml() {
@@ -173,6 +178,8 @@ function make_intake_file {
 	EOF
 	echo "---->>> Wrote \`"$INTAKES"\`"
 	sleep 0.5
+	
+	echo "-->>> Intake file configured."
 }
 
 function make_docker_compose_file {
@@ -192,6 +199,8 @@ function make_docker_compose_file {
 		echo "---->>> Aborting..."
 		exit 1
 	fi
+	
+	echo "-->>> Docker compose file configured."
 }
 
 function start_forwarder {
@@ -209,7 +218,7 @@ function final_info {
 	cat "$INTAKES"
 	echo; echo; echo
 	sleep 0.5
-	echo "---->>> NOTE: Edit \`"$INTAKES"\` to modify protocols, ports, and intakes."
+	echo "-->>> NOTE: Edit \`"$INTAKES"\` to modify protocols, ports, and intakes."
 }
 
 function execute_steps {
@@ -239,11 +248,11 @@ function setup {
 	)
 
 	# verify Debian state
-	echo "---->>> Configuring Debian settings..."
+	echo "-->>> Starting Debian configuration."
 	sleep 1
 	execute_steps "${debian[@]}"
 
-	echo "---->>> Installing Docker and Sekoia Forwarder..."
+	echo "-->>> Starting Docker and Sekoia Forwarder configuration."
 	sleep 1
 
 	# create install dir
