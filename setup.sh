@@ -108,6 +108,10 @@ function install_sekoia_agent {
 			echo "---->>> auditd will be stopped and disabled for agent compatibility."
 			sudo systemctl stop auditd
 			sudo systemctl disable auditd
+
+		elif systemctl is-enabled --quiet auditd 2>/dev/null; then
+			echo "---->>> auditd is enabled and will be disabled for agent compatibility."
+			sudo systemctl disable auditd
 		fi
 
 		# setup Sekoia agent with intake key
