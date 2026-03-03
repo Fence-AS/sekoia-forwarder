@@ -2,32 +2,43 @@
 
 Automates the installation and guides the user through the configuration of the **Sekoia Forwarder**, **Endpoint agent**, and **Forwarder Health agent**.
 
+## Contents
+- [Prerequisites](#Prerequisites)
+    - [Networking](#Networking)
+    - [System](#System)
+- [Installation](#Installation)
+    - [Set a static IP address in Debian 13](#Set-a-static-IP-address-in-Debian-13)
+ 
+---
+
 ## Prerequisites
 
 ### Networking
 
-- _INBOUND TCP/UDP_ flows from systems and applications to the forwarder on the ports of your choice
-- _OUTBOUND TCP_ flow to `intake.sekoia.io` (FRA1) on port `10514` (only use the IP if absolutely necessary: `213.32.5.228`)
+- _Inbound TCP/UDP_ flows from systems and applications to the forwarder on the ports of your choice
+- _Outbound TCP_ flow to `intake.sekoia.io` (FRA1) on port `10514`
 
 ### System
 
-Minimal recommended system requirements (1000 assets across all intakes):
+- This setup script must run on Debian (or a Debian-based) `amd64`/`x86-64` system.
+    - _We recommend a minimal software installation of Debian 13 (specifically the `netinst` ISO): [https://www.debian.org/download](https://www.debian.org/download)_
+- Recommended system requirements (number of assets counts across all intakes):
+  | Number of assets |  vCPUs |  RAM (GB) | Disk size (GB) |
+  |------------------|:------:|:---------:|:--------------:|
+  | `1000`  _(default)_ |   `2`  |   `4`     |     `200`      |
+  | `10 000`         |   `4`  |   `8`     |     `1000`     |
+  | `50 000`         |   `6`  |   `16`    |     `5000`     |
 
-|  vCPUs |  RAM (GB) | Disk size (GB) |
-|--------|:---------:|:--------------:|
-|    2   |   4       |      200       |
-
-> _More information here: [https://docs.sekoia.io/integration/ingestion_methods/syslog/sekoiaio_forwarder/#prerequisites](https://docs.sekoia.io/integration/ingestion_methods/syslog/sekoiaio_forwarder/#prerequisites)_
-
-This setup script must run on Debian (or a Debian-based) amd64/x86-64 system. _We recommend a minimal software installation of Debian 13._
-
-- Download the `netinst` (recommended) ISO here: [https://www.debian.org/download](https://www.debian.org/download)
+> [!NOTE]
+> These data are recommendations based on standards and observed averages on Sekoia.io, so they may change depending on usecases.
+> _More information: [https://docs.sekoia.io/integration/ingestion_methods/syslog/sekoiaio_forwarder/#prerequisites](https://docs.sekoia.io/integration/ingestion_methods/syslog/sekoiaio_forwarder/#prerequisites)_
 
 ---
 
 ## Installation
 
-> Remember to set a [static IP address](#set-a-static-ip-address-in-debian-13).
+> [!TIP]
+>  Remember to set a **static IP address** [in Debian](#set-a-static-ip-address-in-debian-13), via DHCP, or other methods.
 
 Download and run the setup script:
 
@@ -35,8 +46,8 @@ Download and run the setup script:
 wget https://raw.githubusercontent.com/Fence-AS/sekoia-forwarder/refs/heads/main/setup.sh
 bash setup.sh
 ```
-
-> By default, minimal Debian 13 doesn't include `sudo`.
+> [!IMPORTANT]
+> By default, minimal Debian 13 **does not** include `sudo`.
 >
 > - As `root`: `apt install sudo -y`
 > - Add the forwarder user: `usermod -aG sudo <USERNAME>`
@@ -56,6 +67,8 @@ During execution, the script prompts for confirmation to run the following steps
 ---
 
 ### Set a static IP address in Debian 13
+
+If a different method is used to achieve a static IP address, this step can be skipped. 
 
 Check IP address and interface name with:
 
