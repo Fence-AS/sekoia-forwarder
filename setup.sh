@@ -8,6 +8,7 @@ DEFAULT_PROTOCOL=tcp
 BASE_DIR="$(pwd)"
 INSTALL_DEST="$BASE_DIR/sekoiaio-concentrator"
 INTAKES="intakes.yaml"
+EXTENDED_CONF_DIR="extended-conf"
 DOCKER_COMPOSE="docker-compose.yml"
 DOCKER_COMPOSE_TEMPLATE_URL='https://raw.githubusercontent.com/SEKOIA-IO/sekoiaio-docker-concentrator/main/docker-compose/docker-compose.yml'
 SEKOIA_AGENT=agent-latest
@@ -15,16 +16,16 @@ SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
 
 function display_welcome {
 	cat <<'EOF'
-          _         _       
- ___  ___| | _____ (_) __ _ 
+          _         _
+ ___  ___| | _____ (_) __ _
 / __|/ _ \ |/ / _ \| |/ _` |
 \__ \  __/   < (_) | | (_| |
 |___/\___|_|\_\___/|_|\__,_|
-  __                                  _           
- / _| ___  _ ____      ____ _ _ __ __| | ___ _ __ 
+  __                                  _
+ / _| ___  _ ____      ____ _ _ __ __| | ___ _ __
 | |_ / _ \| '__\ \ /\ / / _` | '__/ _` |/ _ \ '__|
-|  _| (_) | |   \ V  V / (_| | | | (_| |  __/ |   
-|_|  \___/|_|    \_/\_/ \__,_|_|  \__,_|\___|_|  
+|  _| (_) | |   \ V  V / (_| | | | (_| |  __/ |
+|_|  \___/|_|    \_/\_/ \__,_|_|  \__,_|\___|_|
 
 EOF
 echo "> Default choices are shown in brackets ([Y]/n = default Yes, y/[N] = default No)."
@@ -36,9 +37,20 @@ if [[ "$answer" =~ ^[Nn] || -z "$answer" ]]; then
 fi
 }
 
+
+function _parse_input_to_yaml() {
+	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+function _nr_of_ports_in_use {
+	intake_ports=$(grep -c "port:" "$INTAKES")
+	extended_conf_ports=$(ls -1 "$EXTENDED_CONF_DIR" | wc -l)
+	echo $(( intake_ports + extended_conf_ports ))
+}
+
 function change_user_password {
 	echo "---->>> Change password for user '$USER'"
-	passwd 
+	passwd
 	echo "-->>> Password for user '$USER' has been changed."
 }
 
@@ -103,7 +115,7 @@ function install_sekoia_agent {
 		echo "---->>> Sekoia Endpoint Agent is already installed! Verify with 'systemctl status SEKOIAEndpointAgent.service'."
 	else
 		echo "---->>> Installing Sekoia Endpoint Agent..."
-		
+
 		if systemctl is-active --quiet auditd; then
 			echo "---->>> auditd will be stopped and disabled for agent compatibility."
 			sudo systemctl stop auditd
@@ -124,10 +136,6 @@ function install_sekoia_agent {
 	echo "-->>> Sekoia Endpoint Agent installation step complete."
 }
 
-function parse_input_to_yaml() {
-	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
-}
-
 function make_intake_file {
 	echo "---->>> Configuring intakes"
 	mv  "$INTAKES" "$INTAKES".bck 2>/dev/null
@@ -138,10 +146,10 @@ function make_intake_file {
 	for i in {0..50}; do
 		echo "---->>> Add new intake"
 
-		# set name 
+		# set name
 		read -r -p "  A descriptive name: " intake_name
 		intake_name_clean="${intake_name// /-}"
-		
+
 		# set protocol and calculate port
 		read -r -p "  Network protocol to use, default is $DEFAULT_PROTOCOL (tcp/udp): " protocol_type
 
@@ -156,15 +164,15 @@ function make_intake_file {
 
 		# write changes
 		cat <<-EOF >> "$INTAKES"
-		- name: "$( parse_input_to_yaml "$intake_name_clean" )"
-		  protocol: "$( parse_input_to_yaml "$protocol_type" )"
+		- name: "$( _parse_input_to_yaml "$intake_name_clean" )"
+		  protocol: "$( _parse_input_to_yaml "$protocol_type" )"
 		  port: $current_port
-		  intake_key: "$( parse_input_to_yaml "$intake_key" )"
+		  intake_key: "$( _parse_input_to_yaml "$intake_key" )"
 		EOF
 
 		echo "Added intake $intake_name ($current_port/$protocol_type)"
 		sleep 0.5
-		
+
 		# break loop if more intakes are not needed
 		read -r -p "More intakes? (y/[N]): " answer
 		if [[ !("$answer" =~ ^[Yy]) ]]; then
@@ -178,12 +186,42 @@ function make_intake_file {
 	cat <<-EOF >> "$INTAKES"
 	- name: Monitoring
 	  stats: True
-	  intake_key: "$(parse_input_to_yaml "$intake_key")"
+	  intake_key: "$(_parse_input_to_yaml "$intake_key")"
 	EOF
 	echo "---->>> Wrote \`"$INTAKES"\`"
 	sleep 0.5
-	
+
 	echo "-->>> Intake file configured."
+}
+
+function make_vmware_vcenter_config {
+	echo "---->>> Creating VMWare VCenter configuration"
+
+	nr_of_ports="$(_nr_of_ports_in_use)"
+	port=$(( START_PORT + nr_of_ports ))
+	read -r -p "  VMWare VCenter intake key: " intake_key
+
+	cat <<-EOF > "$EXTENDED_CONF_DIR/11-vcenter.conf"
+	input(type="imtcp" port="$port" ruleset="remoteVmwarevCenter")
+
+	template(name="SEKOIAIOTemplate" type="string" string="<%pri%>1 %timestamp:::date-rfc3339% %hostname% %app-name% %procid% LOG [SEKOIA@53288 intake_key="$intake_key"] %msg%\n")
+	ruleset(name="remoteVmwarevCenter"){
+	  if($programname == "vpxd") then {
+	    action(
+	        type="omfwd"
+	        protocol="tcp"
+	        target="intake.sekoia.io"
+	        port="10514"
+	        TCP_Framing="octet-counted"
+	        StreamDriver="gtls"
+	        StreamDriverMode="1"
+	        StreamDriverAuthMode="x509/name"
+	        StreamDriverPermittedPeers="intake.sekoia.io"
+	        Template="SEKOIAIOTemplate"
+	    )
+	  }
+	}
+	EOF
 }
 
 function make_docker_compose_file {
@@ -191,9 +229,9 @@ function make_docker_compose_file {
 	mv  "$DOCKER_COMPOSE" "$DOCKER_COMPOSE".bck 2>/dev/null
 	wget -O "$DOCKER_COMPOSE" "$DOCKER_COMPOSE_TEMPLATE_URL"
 	grep -q "20516-20566:20516-20566" "$DOCKER_COMPOSE"
-	
+
 	if [[ $? -eq 0 ]]; then
-		nr_of_ports=$(grep -c "port:" "$INTAKES")
+		nr_of_ports="$(_nr_of_ports_in_use)"
 		LAST_PORT=$(( START_PORT + nr_of_ports - 1 ))
 		echo "---->>> Modifying ports in docker-compose file to match intake file"
 		sed -i "s/20516-/$START_PORT-/g" "$DOCKER_COMPOSE"
@@ -203,7 +241,13 @@ function make_docker_compose_file {
 		echo "---->>> Aborting..."
 		exit 1
 	fi
-	
+
+	# add extended configurations
+	extconf="$EXTENDED_CONF_DIR"
+	old=":/intakes.yaml"
+	new=":/intakes.yaml\r\n      - ./"$extconf":/"$extconf""
+	sed -i "s|$old|$new|" "$DOCKER_COMPOSE"
+
 	echo "-->>> Docker compose file configured."
 }
 
@@ -220,20 +264,21 @@ function final_info {
 
 	echo "---->>> Intake file in use:"
 	cat "$INTAKES"
-	echo; echo; echo
-	sleep 0.5
+	echo
 	echo "-->>> NOTE: Edit \`"$INTAKES"\` to modify protocols, ports, and intakes."
+
+	echo "---->>> Extended configurations:"
+	echo "$(grep -H -r -m1 "port=" "$EXTENDED_CONF_DIR")"
 }
 
 function execute_steps {
 	for funct in "$@"; do
 		read -r -p "Run step $funct? ([Y]/n): " answer
-		sleep 0.5
 		# accepts y, Y, and [ENTER] (empty)
 		if [[ "$answer" =~ ^[Yy] || -z "$answer" ]]; then
 			"$funct"
 		fi
-	done 
+	done
 }
 
 function setup {
@@ -247,6 +292,7 @@ function setup {
 		docker_install
 		install_sekoia_agent
 		make_intake_file
+		make_vmware_vcenter_config
 		make_docker_compose_file
 		start_forwarder
 	)
@@ -262,6 +308,9 @@ function setup {
 	# create install dir
 	mkdir -p "$INSTALL_DEST"
 	cd "$INSTALL_DEST"
+
+	# create configuration files dir
+	mkdir -p "$EXTENDED_CONF_DIR"
 
 	# install docker and forwarder
 	execute_steps "${docker_sekoia[@]}"
