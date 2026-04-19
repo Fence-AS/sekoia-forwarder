@@ -7,6 +7,7 @@ Automates the installation and guides the user through the configuration of the 
     - [Networking](#Networking)
     - [System](#System)
 - [Installation](#Installation)
+    - [Minimal software installation](#minimal-software-installation)    
     - [Set a static IP address in Debian 13](#Set-a-static-IP-address-in-Debian-13)
  
 ---
@@ -74,6 +75,7 @@ During execution, the script prompts for confirmation to run the following steps
 <br/>
 <img width="2058" height="1158" alt="image" src="https://github.com/user-attachments/assets/adfa8f40-29ea-463f-9933-caedd8c186e1" />
 
+---
 
 ### Set a static IP address in Debian 13
 
