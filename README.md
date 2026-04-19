@@ -21,7 +21,8 @@ Automates the installation and guides the user through the configuration of the 
 ### System
 
 - This setup script must run on Debian (or a Debian-based) `amd64`/`x86-64` system.
-    - _We recommend a minimal software installation of Debian 13 (specifically the `netinst` ISO): [https://www.debian.org/download](https://www.debian.org/download)_
+    - We recommend a [minimal software installation](#minimal-software-installation) of Debian 13.
+      - Use the `netinst` ISO: [https://www.debian.org/download](https://www.debian.org/download)
 - Recommended system requirements (number of assets counts across all intakes):
   | Number of assets |  vCPUs |  RAM (GB) | Disk size (GB) |
   |------------------|:------:|:---------:|:--------------:|
@@ -47,7 +48,7 @@ wget https://raw.githubusercontent.com/Fence-AS/sekoia-forwarder/refs/heads/main
 bash setup.sh
 ```
 > [!IMPORTANT]
-> By default, minimal Debian 13 **does not** include `sudo`.
+> Unless the root account was disabled during installation by leaving its password blank, `sudo` must be installed manually and your user added to the sudo group.
 >
 > - As `root`: `apt install sudo -y`
 > - Add the forwarder user: `usermod -aG sudo <USERNAME>`
@@ -65,6 +66,14 @@ During execution, the script prompts for confirmation to run the following steps
 - Start the Sekoia forwarder
 
 ---
+
+### Minimal software installation
+
+
+<img width="1460" height="471" alt="image" src="https://github.com/user-attachments/assets/26ec6b3f-2682-44d2-9741-049b924816da" />
+<br/>
+<img width="2058" height="1158" alt="image" src="https://github.com/user-attachments/assets/adfa8f40-29ea-463f-9933-caedd8c186e1" />
+
 
 ### Set a static IP address in Debian 13
 
