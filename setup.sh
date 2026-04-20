@@ -15,16 +15,16 @@ SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
 
 function display_welcome {
 	cat <<'EOF'
-          _         _       
- ___  ___| | _____ (_) __ _ 
+          _         _
+ ___  ___| | _____ (_) __ _
 / __|/ _ \ |/ / _ \| |/ _` |
 \__ \  __/   < (_) | | (_| |
 |___/\___|_|\_\___/|_|\__,_|
-  __                                  _           
- / _| ___  _ ____      ____ _ _ __ __| | ___ _ __ 
+  __                                  _
+ / _| ___  _ ____      ____ _ _ __ __| | ___ _ __
 | |_ / _ \| '__\ \ /\ / / _` | '__/ _` |/ _ \ '__|
-|  _| (_) | |   \ V  V / (_| | | | (_| |  __/ |   
-|_|  \___/|_|    \_/\_/ \__,_|_|  \__,_|\___|_|  
+|  _| (_) | |   \ V  V / (_| | | | (_| |  __/ |
+|_|  \___/|_|    \_/\_/ \__,_|_|  \__,_|\___|_|
 
 EOF
 echo "> Default choices are shown in brackets ([Y]/n = default Yes, y/[N] = default No)."
@@ -38,7 +38,7 @@ fi
 
 function change_user_password {
 	echo "---->>> Change password for user '$USER'"
-	passwd 
+	passwd
 	echo "-->>> Password for user '$USER' has been changed."
 }
 
@@ -50,18 +50,18 @@ function change_root_password {
 
 function install_dependencies {
 	echo "---->>> Installing dependencies; a sudo password prompt might appear"
-	sudo apt-get update > /dev/null
+	sudo apt-get update
 	echo "---->>> Installing unattended upgrades..."
-	sudo apt-get install -y unattended-upgrades > /dev/null
+	sudo apt-get install -y unattended-upgrades
 	echo "---->>> Installing prerequisite packages..."
-	sudo apt-get install -y ca-certificates curl gnupg lsb-release wget > /dev/null
+	sudo apt-get install -y ca-certificates curl gnupg lsb-release wget
 	echo "-->>> Dependencies and prerequisite packages installed."
 }
 
 function docker_install {
 	# from https://docs.sekoia.io/integration/ingestion_methods/sekoiaio_forwarder/#5-minutes-setup-on-debian
-	sudo apt-get update > /dev/null
-	sudo apt-get remove -y docker docker-engine docker.io containerd runc > /dev/null
+	sudo apt-get update
+	sudo apt-get remove -y docker docker-engine docker.io containerd runc
 	echo "---->>> Old docker versions removed"
 
 	sudo mkdir -m 0755 -p /etc/apt/keyrings
@@ -70,11 +70,11 @@ function docker_install {
 
 	echo \
 	  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-	  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+	  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
 	echo "---->>> Repository updated, ready to start Docker installation"
 
-	sudo apt-get update > /dev/null
-	sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin > /dev/null
+	sudo apt-get update
+	sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 	echo "---->>> Docker packages installed"
 
 	sudo docker run hello-world
@@ -103,13 +103,13 @@ function install_sekoia_agent {
 		echo "---->>> Sekoia Endpoint Agent is already installed! Verify with 'systemctl status SEKOIAEndpointAgent.service'."
 	else
 		echo "---->>> Installing Sekoia Endpoint Agent..."
-		
+
 		if systemctl is-active --quiet auditd; then
 			echo "---->>> auditd will be stopped and disabled for agent compatibility."
 			sudo systemctl stop auditd
 			sudo systemctl disable auditd
 
-		elif systemctl is-enabled --quiet auditd 2>/dev/null; then
+		elif systemctl is-enabled --quiet auditd; then
 			echo "---->>> auditd is enabled and will be disabled for agent compatibility."
 			sudo systemctl disable auditd
 		fi
@@ -130,7 +130,7 @@ function parse_input_to_yaml() {
 
 function make_intake_file {
 	echo "---->>> Configuring intakes"
-	mv  "$INTAKES" "$INTAKES".bck 2>/dev/null
+	mv  "$INTAKES" "$INTAKES".bck
 
 	# format file
 	echo -e "---\nintakes:" > "$INTAKES"
@@ -138,10 +138,10 @@ function make_intake_file {
 	for i in {0..50}; do
 		echo "---->>> Add new intake"
 
-		# set name 
+		# set name
 		read -r -p "  A descriptive name: " intake_name
 		intake_name_clean="${intake_name// /-}"
-		
+
 		# set protocol and calculate port
 		read -r -p "  Network protocol to use, default is $DEFAULT_PROTOCOL (tcp/udp): " protocol_type
 
@@ -164,7 +164,7 @@ function make_intake_file {
 
 		echo "Added intake $intake_name ($current_port/$protocol_type)"
 		sleep 0.5
-		
+
 		# break loop if more intakes are not needed
 		read -r -p "More intakes? (y/[N]): " answer
 		if [[ !("$answer" =~ ^[Yy]) ]]; then
@@ -173,7 +173,7 @@ function make_intake_file {
 	done
 
 	echo "---->>> Activating monitoring of forwarder logs"
-	sleep 0.5
+	sleep 1
 	read -r -p "  Sekoia.io forwarder logs intake key: " intake_key
 	cat <<-EOF >> "$INTAKES"
 	- name: Monitoring
@@ -181,17 +181,17 @@ function make_intake_file {
 	  intake_key: "$(parse_input_to_yaml "$intake_key")"
 	EOF
 	echo "---->>> Wrote \`"$INTAKES"\`"
-	sleep 0.5
-	
+	sleep 1
+
 	echo "-->>> Intake file configured."
 }
 
 function make_docker_compose_file {
 	echo "---->>> Downloading docker-compose template..."
-	mv  "$DOCKER_COMPOSE" "$DOCKER_COMPOSE".bck 2>/dev/null
+	mv  "$DOCKER_COMPOSE" "$DOCKER_COMPOSE".bck
 	wget -O "$DOCKER_COMPOSE" "$DOCKER_COMPOSE_TEMPLATE_URL"
 	grep -q "20516-20566:20516-20566" "$DOCKER_COMPOSE"
-	
+
 	if [[ $? -eq 0 ]]; then
 		nr_of_ports=$(grep -c "port:" "$INTAKES")
 		LAST_PORT=$(( START_PORT + nr_of_ports - 1 ))
@@ -203,7 +203,7 @@ function make_docker_compose_file {
 		echo "---->>> Aborting..."
 		exit 1
 	fi
-	
+
 	echo "-->>> Docker compose file configured."
 }
 
@@ -221,19 +221,18 @@ function final_info {
 	echo "---->>> Intake file in use:"
 	cat "$INTAKES"
 	echo; echo; echo
-	sleep 0.5
+	sleep 1
 	echo "-->>> NOTE: Edit \`"$INTAKES"\` to modify protocols, ports, and intakes."
 }
 
 function execute_steps {
 	for funct in "$@"; do
 		read -r -p "Run step $funct? ([Y]/n): " answer
-		sleep 0.5
 		# accepts y, Y, and [ENTER] (empty)
 		if [[ "$answer" =~ ^[Yy] || -z "$answer" ]]; then
 			"$funct"
 		fi
-	done 
+	done
 }
 
 function setup {
