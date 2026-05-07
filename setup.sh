@@ -120,6 +120,11 @@ function install_sekoia_agent {
 		sudo ./"$SEKOIA_AGENT" install --intake-key "$agent_key"
 		sudo systemctl status SEKOIAEndpointAgent.service --no-pager
 		rm "$SEKOIA_AGENT"
+		# stop listening to audit events
+		sudo systemctl stop systemd-journald-audit.socket
+		sudo systemctl disable systemd-journald-audit.socket
+		sudo systemctl mask systemd-journald-audit.socket
+		sudo systemctl restart systemd-journald
 	fi
 	echo "-->>> Sekoia Endpoint Agent installation step complete."
 }
