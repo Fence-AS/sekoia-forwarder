@@ -135,7 +135,7 @@ function parse_input_to_yaml() {
 
 function make_intake_file {
 	echo "---->>> Configuring intakes"
-	mv  "$INTAKES" "$INTAKES".bck
+	mv  "$INTAKES" "$INTAKES".bck 2>/dev/null
 
 	# format file
 	echo -e "---\nintakes:" > "$INTAKES"
