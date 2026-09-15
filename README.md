@@ -35,6 +35,10 @@ Automates the installation and guides the user through the configuration of the 
 > These data are recommendations based on standards and observed averages on Sekoia.io, so they may change depending on usecases.
 > _More information: [https://docs.sekoia.io/integration/ingestion_methods/syslog/sekoiaio_forwarder/#prerequisites](https://docs.sekoia.io/integration/ingestion_methods/syslog/sekoiaio_forwarder/#prerequisites)_
 
+> [!IMPORTANT]
+> **Avoid disk encryption** unless you can automate the boot process. By default, encryption requires manual input on every reboot, which prevents unattended restarts.
+
+
 ---
 
 ## Installation
