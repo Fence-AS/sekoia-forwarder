@@ -12,6 +12,8 @@ DOCKER_COMPOSE="docker-compose.yml"
 DOCKER_COMPOSE_TEMPLATE_URL='https://raw.githubusercontent.com/SEKOIA-IO/sekoiaio-docker-concentrator/main/docker-compose/docker-compose.yml'
 SEKOIA_AGENT=agent-latest
 SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
+FORWARDER_UPDATER=/opt/forwarder-updater.sh
+
 
 function display_welcome {
 	cat <<'EOF'
@@ -217,6 +219,34 @@ function start_forwarder {
 	sudo docker compose up -d
 }
 
+function make_upgrade_job {
+	sudo tee "$FORWARDER_UPDATER" > /dev/null <<-EOF
+	#!/bin/bash
+
+	TEMP_COMPOSE=/tmp/sekoia-docker-compose.yml
+
+	# upgrade system
+	DEBIAN_FRONTEND=noninteractive apt-get update -qq
+	DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+
+	# upgrade image
+	wget -qO "\$TEMP_COMPOSE" $DOCKER_COMPOSE_TEMPLATE_URL
+
+	IMAGE_LINE=\$(grep -m1 '^[[:space:]]*image:' "\$TEMP_COMPOSE")
+	rm "\$TEMP_COMPOSE"
+
+	cd "$INSTALL_DEST"
+	sed -i "s|^[[:space:]]*image:.*|\$IMAGE_LINE|" "$DOCKER_COMPOSE"
+
+	docker compose pull
+	docker image prune -f
+	reboot
+	EOF
+
+	sudo chmod 700 "$FORWARDER_UPDATER"
+	echo "0 3 * * 0 $FORWARDER_UPDATER" | sudo crontab -
+}
+
 function final_info {
 	if [[ ! -d "$INSTALL_DEST" ]]; then
 		echo "---->>> No Sekoia Forwarder installation path found!"
@@ -252,6 +282,7 @@ function setup {
 		install_sekoia_agent
 		make_intake_file
 		make_docker_compose_file
+		make_upgrade_job
 		start_forwarder
 	)
 
