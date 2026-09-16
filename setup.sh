@@ -222,7 +222,8 @@ function start_forwarder {
 function make_upgrade_job {
 	sudo tee "$FORWARDER_UPDATER" > /dev/null <<-EOF
 	#!/bin/bash
-
+	set -e
+	
 	TEMP_COMPOSE=/tmp/sekoia-docker-compose.yml
 
 	# upgrade system
@@ -232,8 +233,10 @@ function make_upgrade_job {
 	# upgrade image
 	wget -qO "\$TEMP_COMPOSE" $DOCKER_COMPOSE_TEMPLATE_URL
 
-	IMAGE_LINE=\$(grep -m1 '^[[:space:]]*image:' "\$TEMP_COMPOSE")
-	rm "\$TEMP_COMPOSE"
+	IMAGE_LINE=\$(grep -m1 '^[[:space:]]*image:' "\$TEMP_COMPOSE" || true)
+	rm -f "\$TEMP_COMPOSE"
+
+	[ -n "\$IMAGE_LINE" ] || exit 1
 
 	cd "$INSTALL_DEST"
 	sed -i "s|^[[:space:]]*image:.*|\$IMAGE_LINE|" "$DOCKER_COMPOSE"
