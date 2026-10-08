@@ -5,14 +5,18 @@
 
 START_PORT=22001
 DEFAULT_PROTOCOL=tcp
-BASE_DIR="$(pwd)"
-INSTALL_DEST="$BASE_DIR/sekoiaio-concentrator"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DEST="$HOME/sekoiaio-concentrator"
 INTAKES="intakes.yaml"
 DOCKER_COMPOSE="docker-compose.yml"
+COMPOSE_OVERRIDE="docker-compose.override.yml"
 DOCKER_COMPOSE_TEMPLATE_URL='https://raw.githubusercontent.com/SEKOIA-IO/sekoiaio-docker-concentrator/main/docker-compose/docker-compose.yml'
 SEKOIA_AGENT=agent-latest
 SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
 FORWARDER_UPDATER=/opt/forwarder-updater.sh
+
+# a failing command inside a pipe (e.g. curl | gpg) must not be hidden
+set -o pipefail
 
 
 function display_welcome {
@@ -38,54 +42,92 @@ if [[ "$answer" =~ ^[Nn] || -z "$answer" ]]; then
 fi
 }
 
+function validate_system {
+	echo "---->>> Validating system..."
+
+	if ! command -v apt-get > /dev/null; then
+		echo "---->>> This is not a Debian-based system (apt-get not found), aborting..."
+		exit 1
+	fi
+
+	if [[ "$(dpkg --print-architecture)" != amd64 ]]; then
+		echo "---->>> Unsupported architecture, amd64 is required, aborting..."
+		exit 1
+	fi
+
+	if ! timeout 5 bash -c "</dev/tcp/intake.sekoia.io/10514" 2>/dev/null; then
+		echo "---->>> No outbound connection to intake.sekoia.io:10514"
+		read -r -p "Continue anyway? (y/[N]): " answer
+		if [[ !("$answer" =~ ^[Yy]) ]]; then
+			exit 1
+		fi
+	fi
+
+	echo "-->>> System validated."
+}
+
 function change_user_password {
 	echo "---->>> Change password for user '$USER'"
-	passwd
+	passwd || return 1
 	echo "-->>> Password for user '$USER' has been changed."
 }
 
 function change_root_password {
 	echo "---->>> Change password for 'root' user (first enter the sudo password for user '$USER')"
-	sudo passwd root
+	sudo passwd root || return 1
 	echo "-->>> Password for user 'root' has been changed."
 }
 
 function install_dependencies {
 	echo "---->>> Installing dependencies; a sudo password prompt might appear"
-	sudo apt-get update
+	sudo apt-get update || return 1
 	echo "---->>> Installing unattended upgrades..."
-	sudo apt-get install -y unattended-upgrades
+	sudo apt-get install -y unattended-upgrades || return 1
 	echo "---->>> Installing prerequisite packages..."
-	sudo apt-get install -y ca-certificates curl gnupg lsb-release wget
+	sudo apt-get install -y ca-certificates curl gnupg wget || return 1
 	echo "-->>> Dependencies and prerequisite packages installed."
 }
 
 function docker_install {
 	# from https://docs.sekoia.io/integration/ingestion_methods/sekoiaio_forwarder/#5-minutes-setup-on-debian
+	local distro codename
+	distro=$(. /etc/os-release && case "$ID $ID_LIKE" in *ubuntu*) echo ubuntu ;; *debian*) echo debian ;; esac)
+	codename=$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+
+	if [[ -z "$distro" || -z "$codename" ]]; then
+		echo "---->>> Could not determine a supported Debian/Ubuntu release from /etc/os-release."
+		return 1
+	fi
+
 	sudo apt-get update
 	sudo apt-get remove -y docker docker-engine docker.io containerd runc
 	echo "---->>> Old docker versions removed"
 
 	sudo mkdir -m 0755 -p /etc/apt/keyrings
-	curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+	curl -fsSL https://download.docker.com/linux/$distro/gpg | sudo gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg || return 1
 	echo "---->>> Docker GPG key added"
 
 	echo \
-	  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-	  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
+	  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$distro \
+	  $codename stable" | sudo tee /etc/apt/sources.list.d/docker.list
 	echo "---->>> Repository updated, ready to start Docker installation"
 
 	sudo apt-get update
-	sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+	sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || return 1
 	echo "---->>> Docker packages installed"
 
-	sudo docker run hello-world
+	sudo docker run --rm hello-world || return 1
 	echo "-->>> Docker installed and verified."
 }
 
 function install_sekoia_agent {
 	if systemctl is-active --quiet SEKOIAEndpointAgent.service; then
 		echo "---->>> Sekoia Endpoint Agent already running, skipping install."
+		return
+	fi
+
+	if [[ -f "/opt/endpoint-agent/agent" ]]; then
+		echo "---->>> Sekoia Endpoint Agent is already installed! Verify with 'systemctl status SEKOIAEndpointAgent.service'."
 		return
 	fi
 
@@ -96,38 +138,38 @@ function install_sekoia_agent {
 
 	echo "---->>> Downloading Sekoia Endpoint Agent..."
 	if ! wget -O ./"$SEKOIA_AGENT" "$SEKOIA_AGENT_URL"; then
-		echo "---->>> Sekoia Endpoint Agent download failed, skipping install."
+		echo "---->>> Sekoia Endpoint Agent download failed."
 		rm -f ./"$SEKOIA_AGENT"
-		return
+		return 1
 	fi
 
-	if [[ -f "/opt/endpoint-agent/agent" ]]; then
-		echo "---->>> Sekoia Endpoint Agent is already installed! Verify with 'systemctl status SEKOIAEndpointAgent.service'."
-	else
-		echo "---->>> Installing Sekoia Endpoint Agent..."
+	echo "---->>> Installing Sekoia Endpoint Agent..."
 
-		if systemctl is-active --quiet auditd; then
-			echo "---->>> auditd will be stopped and disabled for agent compatibility."
-			sudo systemctl stop auditd
-			sudo systemctl disable auditd
+	if systemctl is-active --quiet auditd; then
+		echo "---->>> auditd will be stopped and disabled for agent compatibility."
+		sudo systemctl stop auditd
+		sudo systemctl disable auditd
 
-		elif systemctl is-enabled --quiet auditd; then
-			echo "---->>> auditd is enabled and will be disabled for agent compatibility."
-			sudo systemctl disable auditd
-		fi
-
-		# setup Sekoia agent with intake key
-		read -r -p "Sekoia endpoint agent intake key: " agent_key
-		chmod +x ./"$SEKOIA_AGENT"
-		sudo ./"$SEKOIA_AGENT" install --intake-key "$agent_key"
-		sudo systemctl status SEKOIAEndpointAgent.service --no-pager
-		rm "$SEKOIA_AGENT"
-		# stop listening to audit events
-		sudo systemctl stop systemd-journald-audit.socket
-		sudo systemctl disable systemd-journald-audit.socket
-		sudo systemctl mask systemd-journald-audit.socket
-		sudo systemctl restart systemd-journald
+	elif systemctl is-enabled --quiet auditd; then
+		echo "---->>> auditd is enabled and will be disabled for agent compatibility."
+		sudo systemctl disable auditd
 	fi
+
+	# setup Sekoia agent with intake key
+	read -r -p "Sekoia endpoint agent intake key: " agent_key
+	chmod +x ./"$SEKOIA_AGENT"
+	if ! sudo ./"$SEKOIA_AGENT" install --intake-key "$agent_key"; then
+		echo "---->>> Sekoia Endpoint Agent installation failed."
+		rm -f ./"$SEKOIA_AGENT"
+		return 1
+	fi
+	sudo systemctl status SEKOIAEndpointAgent.service --no-pager
+	rm -f ./"$SEKOIA_AGENT"
+	# stop listening to audit events
+	sudo systemctl stop systemd-journald-audit.socket
+	sudo systemctl disable systemd-journald-audit.socket
+	sudo systemctl mask systemd-journald-audit.socket
+	sudo systemctl restart systemd-journald
 	echo "-->>> Sekoia Endpoint Agent installation step complete."
 }
 
@@ -195,11 +237,15 @@ function make_intake_file {
 
 function make_docker_compose_file {
 	echo "---->>> Downloading docker-compose template..."
-	mv  "$DOCKER_COMPOSE" "$DOCKER_COMPOSE".bck
-	wget -O "$DOCKER_COMPOSE" "$DOCKER_COMPOSE_TEMPLATE_URL"
-	grep -q "20516-20566:20516-20566" "$DOCKER_COMPOSE"
+	mv "$DOCKER_COMPOSE" "$DOCKER_COMPOSE".bck 2>/dev/null
+	if ! wget -O "$DOCKER_COMPOSE" "$DOCKER_COMPOSE_TEMPLATE_URL"; then
+		echo "---->>> Download of the docker-compose template failed."
+		rm -f "$DOCKER_COMPOSE"
+		mv "$DOCKER_COMPOSE".bck "$DOCKER_COMPOSE" 2>/dev/null
+		return 1
+	fi
 
-	if [[ $? -eq 0 ]]; then
+	if grep -q "20516-20566:20516-20566" "$DOCKER_COMPOSE"; then
 		nr_of_ports=$(grep -c "port:" "$INTAKES")
 		LAST_PORT=$(( START_PORT + nr_of_ports - 1 ))
 		echo "---->>> Modifying ports in docker-compose file to match intake file"
@@ -211,43 +257,76 @@ function make_docker_compose_file {
 		exit 1
 	fi
 
+	make_compose_override
 	echo "-->>> Docker compose file configured."
+}
+
+function make_compose_override {
+	# the upstream template does not rotate container logs, cap them so they cannot fill the disk
+	if [[ -f "$COMPOSE_OVERRIDE" ]]; then
+		echo "---->>> $COMPOSE_OVERRIDE already exists, leaving it untouched."
+		return
+	fi
+
+	cat <<-EOF > "$COMPOSE_OVERRIDE"
+	services:
+	  rsyslog:
+	    logging:
+	      driver: json-file
+	      options:
+	        max-size: "50m"
+	        max-file: "5"
+	EOF
+	echo "---->>> Wrote $COMPOSE_OVERRIDE"
 }
 
 function start_forwarder {
 	echo "---->>> Starting the forwarder..."
-	sudo docker compose up -d
+	sudo docker compose up -d || return 1
+
+	sleep 10
+	if [[ "$(sudo docker compose ps --format '{{.State}}' | sort -u)" != "running" ]]; then
+		echo "---->>> The forwarder is not running!"
+		sudo docker compose ps
+		sudo docker compose logs --tail 20
+		return 1
+	fi
+
+	sudo docker compose ps
+	echo "-->>> Forwarder is running. Logs from the monitoring intake should show up in Sekoia within a few minutes."
 }
 
 function make_upgrade_job {
-	sudo tee "$FORWARDER_UPDATER" > /dev/null <<-EOF
-	#!/bin/bash
-	set -e
-	
-	TEMP_COMPOSE=/tmp/sekoia-docker-compose.yml
+	echo "---->>> Installing weekly update job"
+	sudo install -m 700 -o root -g root "$SCRIPT_DIR/forwarder-updater.sh" "$FORWARDER_UPDATER" || return 1
 
-	# upgrade system
-	DEBIAN_FRONTEND=noninteractive apt-get update -qq
-	DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+	sudo tee /etc/systemd/system/forwarder-update.service > /dev/null <<-EOF || return 1
+	[Unit]
+	Description=Sekoia forwarder system and image update
+	After=network-online.target docker.service
+	Wants=network-online.target
 
-	# upgrade image
-	wget -qO "\$TEMP_COMPOSE" $DOCKER_COMPOSE_TEMPLATE_URL
-
-	IMAGE_LINE=\$(grep -m1 '^[[:space:]]*image:' "\$TEMP_COMPOSE" || true)
-	rm -f "\$TEMP_COMPOSE"
-
-	[ -n "\$IMAGE_LINE" ] || exit 1
-
-	cd "$INSTALL_DEST"
-	sed -i "s|^[[:space:]]*image:.*|\$IMAGE_LINE|" "$DOCKER_COMPOSE"
-
-	docker compose pull
-	docker image prune -f
-	reboot
+	[Service]
+	Type=oneshot
+	Environment="INSTALL_DEST=$INSTALL_DEST"
+	ExecStart=$FORWARDER_UPDATER
 	EOF
 
-	sudo chmod 700 "$FORWARDER_UPDATER"
-	echo "0 3 * * 0 $FORWARDER_UPDATER" | sudo crontab -
+	sudo tee /etc/systemd/system/forwarder-update.timer > /dev/null <<-EOF || return 1
+	[Unit]
+	Description=Weekly Sekoia forwarder update
+
+	[Timer]
+	OnCalendar=Sun *-*-* 03:00:00
+	Persistent=true
+
+	[Install]
+	WantedBy=timers.target
+	EOF
+
+	sudo systemctl daemon-reload || return 1
+	sudo systemctl enable --now forwarder-update.timer || return 1
+	echo "-->>> Weekly update job installed. Check with 'systemctl list-timers forwarder-update.timer'."
 }
 
 function final_info {
@@ -268,7 +347,13 @@ function execute_steps {
 		read -r -p "Run step $funct? ([Y]/n): " answer
 		# accepts y, Y, and [ENTER] (empty)
 		if [[ "$answer" =~ ^[Yy] || -z "$answer" ]]; then
-			"$funct"
+			if ! "$funct"; then
+				echo "---->>> Step $funct failed."
+				read -r -p "Continue with the next step anyway? (y/[N]): " answer
+				if [[ !("$answer" =~ ^[Yy]) ]]; then
+					exit 1
+				fi
+			fi
 		fi
 	done
 }
@@ -305,9 +390,53 @@ function setup {
 	execute_steps "${docker_sekoia[@]}"
 }
 
+function find_install_dir {
+	# the compose label on the forwarder container tells where it was installed
+	local dir
+	dir=$(sudo docker ps -a --format '{{.Image}}|{{.Label "com.docker.compose.project.working_dir"}}' | grep -F 'sekoiaio-docker-concentrator' | head -n1 | cut -d'|' -f2-)
+
+	if [[ -n "$dir" ]]; then
+		INSTALL_DEST="$dir"
+	fi
+
+	if [[ ! -f "$INSTALL_DEST/$DOCKER_COMPOSE" ]]; then
+		read -r -p "Could not find the forwarder, enter its install directory: " INSTALL_DEST
+	fi
+
+	[[ -f "$INSTALL_DEST/$DOCKER_COMPOSE" ]]
+}
+
+function upgrade_forwarder {
+	# upgrade steps to do for "old" forwarders
+	upgrade_steps=(
+		make_upgrade_job
+		make_compose_override
+		start_forwarder
+	)
+
+	echo "---->>> Upgrading existing Sekoia Forwarder installation"
+
+	if ! find_install_dir; then
+		echo "---->>> No Sekoia Forwarder installation found, aborting..."
+		exit 1
+	fi
+
+	echo "---->>> Using install directory: $INSTALL_DEST"
+	cd "$INSTALL_DEST"
+	execute_steps "${upgrade_steps[@]}"
+}
+
 ########################################
 # Main
 ########################################
+
+UPGRADE=false
+if [[ "$1" == "--upgrade" ]]; then
+	UPGRADE=true
+elif [[ -n "$1" ]]; then
+	echo "Usage: bash setup.sh [--upgrade]"
+	exit 1
+fi
 
 if [[ "$EUID" -eq 0 ]]; then
 	echo "ERROR: Do not run this script as 'root' or with 'sudo'!"
@@ -315,12 +444,19 @@ if [[ "$EUID" -eq 0 ]]; then
 	exit 1
 fi
 
-display_welcome
+if [[ "$UPGRADE" == false ]]; then
+	display_welcome
+fi
 
 # run if user is in sudoers
 if id -nG "$USER" | grep -qw sudo; then
-	setup
-	final_info
+	if [[ "$UPGRADE" == true ]]; then
+		upgrade_forwarder
+	else
+		validate_system
+		setup
+		final_info
+	fi
 else
 	echo "ERROR: User is not in sudoers group!"
 	echo
