@@ -21,7 +21,7 @@ Automates the installation and guides the user through the configuration of the 
 
 - _Inbound TCP/UDP_ flows from systems and applications to the forwarder on the ports of your choice
 - _Outbound TCP_ flow to `intake.sekoia.io` (FRA1) on port `10514`
-- _Outbound HTTPS_ (`443`) for installation and the weekly update, to the Debian package mirrors, `download.docker.com`, `ghcr.io`, `raw.githubusercontent.com`, `github.com` and `app.sekoia.io`. If this is blocked, the forwarder keeps running but the weekly update will fail (see `journalctl -u forwarder-update`).
+- _Outbound HTTPS_ (`443`) for installation and the weekly update, to the Debian package mirrors, `download.docker.com`, `ghcr.io`, `raw.githubusercontent.com`, `github.com` and `app.sekoia.io`. If this is blocked, the forwarder keeps running but the weekly update will fail (see `sudo journalctl -u forwarder-update`).
 
 ### System
 
@@ -132,7 +132,7 @@ Check the schedule and the result of the last run:
 
 ```bash
 systemctl list-timers forwarder-update.timer
-journalctl -u forwarder-update
+sudo journalctl -u forwarder-update
 ```
 
 To run an update immediately (the server reboots when it finishes):
