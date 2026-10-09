@@ -11,6 +11,8 @@ APT_OPTIONS=(-o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confdef -o Dp
 apt-get update -q "${APT_OPTIONS[@]}"
 apt-get full-upgrade -y -q "${APT_OPTIONS[@]}"
 apt-get autoremove -y -q "${APT_OPTIONS[@]}"
+apt-get clean
+docker image prune -a -f
 
 echo "Rebooting..."
 systemctl reboot
