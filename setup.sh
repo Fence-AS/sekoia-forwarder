@@ -100,7 +100,7 @@ function docker_install {
 	fi
 
 	sudo apt-get update
-	sudo apt-get remove -y docker docker-engine docker.io containerd runc
+	sudo apt-get remove -y docker.io docker-compose docker-doc docker-buildx podman-docker containerd runc
 	echo "---->>> Old docker versions removed"
 
 	sudo mkdir -m 0755 -p /etc/apt/keyrings
@@ -284,6 +284,7 @@ function start_forwarder {
 	echo "---->>> Starting the forwarder..."
 	sudo docker compose up -d || return 1
 
+	echo "---->>> Verifying the forwarder, please wait..."
 	sleep 10
 	if [[ "$(sudo docker compose ps --format '{{.State}}' | sort -u)" != "running" ]]; then
 		echo "---->>> The forwarder is not running!"
