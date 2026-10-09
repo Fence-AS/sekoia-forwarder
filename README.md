@@ -126,11 +126,7 @@ sudo systemctl restart ifup@<YOUR_INTERFACE_NAME>
 
 ## Updates
 
-A systemd timer (`forwarder-update.timer`) runs every Sunday at 03:00 and:
-
-1. Upgrades the operating system packages.
-2. Updates the forwarder image version from the upstream docker-compose template and restarts the forwarder. If the new version does not come up, the previous compose file is restored.
-3. Reboots the server.
+A systemd timer (`forwarder-update.timer`) runs every Sunday at 03:00. It upgrades the operating system packages and reboots the server.
 
 Check the schedule and the result of the last run:
 
@@ -155,13 +151,13 @@ git pull
 bash setup.sh --upgrade
 ```
 
-This locates the install directory from the running container, installs the upgrade and may recreate the container (a few seconds of downtime).
+This locates the install directory from the running container, installs the upgrade and may recreate the container (a few seconds of downtime). The forwarder image version is set by the script, so a new version is rolled out this way and not by the weekly update. The previous compose file is saved as `docker-compose.yml.bck` in the install directory, and if the forwarder does not start, the script prints the command to restore it.
 
 ### Migration from `wget`
 
 A forwarder installed with the old `wget` method has no clone yet. Do not run the commands from [Installation](#installation), they start a new installation.
 
-Instead clone the repository and only run #setup.py with `--upgrade`. It will automatically find the existing installation, wherever it was installed:
+Instead clone the repository and only run `setup.sh` with `--upgrade`. It will automatically find the existing installation, wherever it was installed:
 
 ```bash
 sudo apt install -y git

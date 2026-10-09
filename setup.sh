@@ -10,6 +10,7 @@ INSTALL_DEST="$HOME/sekoiaio-concentrator"
 INTAKES="intakes.yaml"
 DOCKER_COMPOSE="docker-compose.yml"
 COMPOSE_OVERRIDE="docker-compose.override.yml"
+IMAGE_VERSION=2.7.5
 DOCKER_COMPOSE_TEMPLATE_URL='https://raw.githubusercontent.com/SEKOIA-IO/sekoiaio-docker-concentrator/main/docker-compose/docker-compose.yml'
 SEKOIA_AGENT=agent-latest
 SEKOIA_AGENT_URL='https://app.sekoia.io/api/v1/xdr-agent/download/agent-latest'
@@ -257,6 +258,7 @@ function make_docker_compose_file {
 		exit 1
 	fi
 
+	set_image_version
 	make_compose_override
 	echo "-->>> Docker compose file configured."
 }
@@ -280,6 +282,16 @@ function make_compose_override {
 	echo "---->>> Wrote $COMPOSE_OVERRIDE"
 }
 
+function set_image_version {
+	if [[ "$UPGRADE" == true ]] && ! grep -q "image:.*:$IMAGE_VERSION$" "$DOCKER_COMPOSE"; then
+		cp -p "$DOCKER_COMPOSE" "$DOCKER_COMPOSE".bck || return 1
+		echo "---->>> Backed up compose file to $INSTALL_DEST/$DOCKER_COMPOSE.bck"
+	fi
+
+	sed -i "s|^\([[:space:]]*image:.*:\).*|\1$IMAGE_VERSION|" "$DOCKER_COMPOSE" || return 1
+	echo "---->>> Forwarder image set to $IMAGE_VERSION"
+}
+
 function start_forwarder {
 	echo "---->>> Starting the forwarder..."
 	sudo docker compose up -d || return 1
@@ -290,6 +302,9 @@ function start_forwarder {
 		echo "---->>> The forwarder is not running!"
 		sudo docker compose ps
 		sudo docker compose logs --tail 20
+		if [[ "$UPGRADE" == true ]]; then
+			echo "---->>> To go back: cd $INSTALL_DEST && mv $DOCKER_COMPOSE.bck $DOCKER_COMPOSE && sudo docker compose up -d"
+		fi
 		return 1
 	fi
 
@@ -303,13 +318,12 @@ function make_upgrade_job {
 
 	sudo tee /etc/systemd/system/forwarder-update.service > /dev/null <<-EOF || return 1
 	[Unit]
-	Description=Sekoia forwarder system and image update
+	Description=Sekoia forwarder system update
 	After=network-online.target docker.service
 	Wants=network-online.target
 
 	[Service]
 	Type=oneshot
-	Environment="INSTALL_DEST=$INSTALL_DEST"
 	ExecStart=$FORWARDER_UPDATER
 	EOF
 
@@ -411,6 +425,7 @@ function upgrade_forwarder {
 	# upgrade steps to do for "old" forwarders
 	upgrade_steps=(
 		make_upgrade_job
+		set_image_version
 		make_compose_override
 		start_forwarder
 	)
