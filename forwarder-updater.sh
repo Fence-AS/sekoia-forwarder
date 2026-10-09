@@ -17,6 +17,7 @@ function rollback {
 	echo "Update failed, restoring previous compose file"
 	cp -p "$DOCKER_COMPOSE".bck "$DOCKER_COMPOSE"
 	docker compose up -d || true
+	echo "Rebooting..."
 	systemctl reboot
 	exit 1
 }
@@ -46,4 +47,5 @@ sed -i "s|^[[:space:]]*image:.*|$IMAGE_LINE|" "$DOCKER_COMPOSE"
 docker compose config -q && docker compose pull && docker compose up -d && forwarder_is_running || rollback
 
 docker image prune -f
+echo "Rebooting..."
 systemctl reboot
